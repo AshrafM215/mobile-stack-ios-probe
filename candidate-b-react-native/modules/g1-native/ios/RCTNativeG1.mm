@@ -205,6 +205,12 @@ static NSString *_Nullable G1NullToNil(id v)
   resolve([G1NativeBridge rollback]);
 }
 
+// bundle.remove is an Android lab hook (contract lab_hooks platforms); the iOS common module has no removal path.
+- (void)removeBundles:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
+{
+  reject(@"UNSUPPORTED", @"bundle.remove is an Android lab hook", nil);
+}
+
 // ---------------- QR ----------------
 
 - (void)validateQr:(NSString *_Nullable)payload resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject

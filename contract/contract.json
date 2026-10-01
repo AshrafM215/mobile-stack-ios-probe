@@ -307,7 +307,11 @@
       "session.window",
       "crash.trigger",
       "command.received",
-      "command.rejected"
+      "command.rejected",
+      "command.failed",
+      "a11y.seeded",
+      "map.camera.done",
+      "fuzz.progress"
     ]
   },
   "lab_hooks": {
@@ -399,7 +403,7 @@
       },
       "bundle.update": {
         "args": {
-          "url": "https://g1lab.test:8443/... (lab endpoint only)"
+          "url": "https://localhost:8443/... (lab endpoint only; the emulator reaches the host lab server through adb reverse tcp:8443)"
         },
         "effect": "download with the candidate's standard HTTP client, then common import; G1MARK update.state/bundle.result"
       },
@@ -443,7 +447,7 @@
           "target": "FUZ01|FUZ02|FUZ03",
           "corpus": "file in the import directory"
         },
-        "effect": "every input through the target parser; writes out/<run_id>.json"
+        "effect": "every input through the target parser; G1MARK fuzz.progress run=<id> n=<inputs done> after each input (TH-FUZ-04 hang bound: 10 s per input); writes out/<run_id>.json"
       },
       "bridge.attack": {
         "args": {
@@ -451,8 +455,65 @@
           "case": "BRG01..BRG07"
         },
         "effect": "crafted calls through the candidate's own runtime-native boundary; writes out/<run_id>.json"
+      },
+      "search.set": {
+        "args": {
+          "text": "string (any Unicode text, e.g. Eastern Arabic digits that the input service cannot type)"
+        },
+        "effect": "home screen, the query set as if typed, then the UI submit handler; G1MARK search.result",
+        "platforms": [
+          "android"
+        ]
+      },
+      "a11y.seed": {
+        "args": {
+          "defect": "missing-label|duplicate-label|small-target|low-contrast|focus-trap|unlabeled-image|wrong-role|missing-state-announcement|none"
+        },
+        "effect": "home screen with one seeded accessibility defect (detector validation of the B05 tooling; \"none\" restores the clean reference state); G1MARK a11y.seeded after the frame that shows it",
+        "seeded_defects": {
+          "missing-label": "home.search.submit has no accessible name",
+          "duplicate-label": "home.qr has the accessible name of home.settings",
+          "small-target": "home.floor.3 smaller than 48 dp (minimum interactive size not applied)",
+          "low-contrast": "home.trust text below 4.5:1 against its background",
+          "focus-trap": "home.search.field consumes the TAB key (keyboard focus cannot leave it)",
+          "unlabeled-image": "an image home.seed.image without an accessible name",
+          "wrong-role": "home.settings exposed as plain text (tap handled, no actionable role)",
+          "missing-state-announcement": "home.floor.<n> without the selected state (neither state nor text announces it)"
+        },
+        "platforms": [
+          "android"
+        ]
+      },
+      "bundle.remove": {
+        "args": {},
+        "effect": "common trust module removes every stored bundle (the trusted-time mark is kept); home screen in the no-verified-data state, map style emptied; G1MARK bundle.result code=REMOVED source=remove",
+        "platforms": [
+          "android"
+        ]
+      },
+      "map.inspect": {
+        "args": {
+          "run_id": "string"
+        },
+        "effect": "writes out/<run_id>.json (G1-MAP-INSPECT-1.0): camera (lon, lat, zoom, bearing, pitch) and the features rendered in the map view per layer (floors, rooms, pois, room-labels, route: id, kind, building, floor, label) as the binding reports them; gesture policy, floor of the rooms-layer filter and label field of the room-labels layer with their source (live: read back from the binding; acknowledged: last value the binding confirmed; declared: value passed to a declarative binding; configured: widget configuration); G1MARK run.done",
+        "platforms": [
+          "android"
+        ]
+      },
+      "map.camera": {
+        "args": {
+          "x_mm": "integer (G1-STYLE-1.0 frame)",
+          "y_mm": "integer",
+          "zoom": "number",
+          "floor": "1|2|3 (optional)"
+        },
+        "effect": "home screen, the floor through the UI floor handler, the camera moved to the registered view without animation (B02 render oracle views); G1MARK map.camera.done after two frames",
+        "platforms": [
+          "android"
+        ]
       }
-    }
+    },
+    "platform_scope": "commands without \"platforms\" exist on Android and iOS; \"platforms\": [\"android\"] marks the hooks of the Android-only harness case families (the iOS scope is build and simulator feasibility)"
   },
   "route_steps": {
     "contract": "G1-ROUTE-STEPS-1.0",
@@ -589,7 +650,7 @@
     "no_permission_on_open": true,
     "backup": "Android allowBackup=false with data extraction rules excluding everything; iOS bundle data marked excluded from backup",
     "logging": "no user-entered text, query, route, payload or canary in any log, trace, marker or crash message; ids and codes only",
-    "network": "no network use except the lab update endpoint https://g1lab.test:8443 (lab CA trusted for that host only); cleartext disabled",
+    "network": "no network use except the lab update endpoint https://localhost:8443 (adb reverse to the host lab server on Android; lab CA trusted for that host only); cleartext disabled",
     "secrets": "none; synthetic lab keys are public by design and only the public half is shipped"
   },
   "bench_protocols": {

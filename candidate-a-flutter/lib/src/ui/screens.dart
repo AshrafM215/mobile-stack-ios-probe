@@ -3,6 +3,7 @@
 // semantics identifier (resource-id on Android, accessibilityIdentifier on iOS).
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../core/format.dart';
@@ -120,13 +121,25 @@ class _HomeScreenState extends State<HomeScreen> {
       SchedulerBinding.instance.addPostFrameCallback((_) => SchedulerBinding.instance.scheduleFrameCallback((_) => state.homeShown()));
     }
     final results = state.results;
+    // lab build only: one seeded accessibility defect (a11y.seed) for detector validation; null is the clean reference state
+    final seed = state.seededDefect;
     return Scaffold(
       appBar: AppBar(
         title: gid('home.title', Text(s.t('app.title'))),
         actions: [
+          if (seed == 'unlabeled-image')
+            gid('home.seed.image', Semantics(image: true, child: const SizedBox(width: 24, height: 24, child: ColoredBox(color: Color(0xFF1F4E79))))),
           gid('home.lang', TextButton(onPressed: state.toggleLang, child: Text(s.t('lang.toggle'))), label: s.t('lang.toggle.a11y')),
-          gid('home.qr', IconButton(icon: const Icon(Icons.qr_code_scanner), tooltip: s.t('home.qr.scan'), onPressed: state.scanQr)),
-          gid('home.settings', IconButton(icon: const Icon(Icons.verified_user_outlined), tooltip: s.t('home.settings'), onPressed: state.openSettings)),
+          gid('home.qr', IconButton(icon: const Icon(Icons.qr_code_scanner),
+              tooltip: seed == 'duplicate-label' ? s.t('home.settings') : s.t('home.qr.scan'), onPressed: state.scanQr)),
+          if (seed == 'wrong-role')
+            gid('home.settings', GestureDetector(
+              excludeFromSemantics: true,
+              onTap: state.openSettings,
+              child: Padding(padding: const EdgeInsets.all(12), child: Text(s.t('home.settings'))),
+            ))
+          else
+            gid('home.settings', IconButton(icon: const Icon(Icons.verified_user_outlined), tooltip: s.t('home.settings'), onPressed: state.openSettings)),
         ],
       ),
       body: SafeArea(
@@ -139,7 +152,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: gid('home.trust', Text(trustText(s, state.bundleInfo))),
+              child: gid('home.trust', Text(trustText(s, state.bundleInfo),
+                  style: seed == 'low-contrast' ? const TextStyle(color: Color(0xFFB0B0B0)) : null)),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -148,13 +162,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: gid(
                       'home.search.field',
-                      TextField(
-                        controller: _field,
-                        enabled: enabled,
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(labelText: s.t('home.search.label'), hintText: s.t('home.search.hint')),
-                        onChanged: (v) => state.setQuery(v),
-                        onSubmitted: (_) => state.submitSearch(),
+                      Focus(
+                        // focus-trap seed: the field's ancestor consumes TAB before the app's focus traversal shortcut
+                        canRequestFocus: false,
+                        skipTraversal: true,
+                        includeSemantics: false,
+                        onKeyEvent: (node, e) =>
+                            seed == 'focus-trap' && e.logicalKey == LogicalKeyboardKey.tab ? KeyEventResult.handled : KeyEventResult.ignored,
+                        child: TextField(
+                          controller: _field,
+                          enabled: enabled,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(labelText: s.t('home.search.label'), hintText: s.t('home.search.hint')),
+                          onChanged: (v) => state.setQuery(v),
+                          onSubmitted: (_) => state.submitSearch(),
+                        ),
                       ),
                     ),
                   ),
@@ -162,7 +184,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     gid('home.search.clear',
                         IconButton(icon: const Icon(Icons.clear), tooltip: s.t('home.search.clear'), onPressed: state.clearSearch)),
                   gid('home.search.submit',
-                      FilledButton(onPressed: enabled ? state.submitSearch : null, child: Text(s.t('home.search.submit')))),
+                      FilledButton(onPressed: enabled ? state.submitSearch : null,
+                          child: seed == 'missing-label' ? const SizedBox(width: 24, height: 24) : Text(s.t('home.search.submit')))),
                 ],
               ),
             ),
@@ -211,17 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(s.t('home.floor.label')),
-                  for (final f in const [1, 2, 3])
-                    gid(
-                      'home.floor.$f',
-                      ChoiceChip(
-                        label: Text(s.t('home.floor.option', {'floor': f})),
-                        selected: state.floor == f,
-                        onSelected: (_) => state.setFloor(f),
-                      ),
-                      label: state.floor == f ? s.t('home.floor.selected', {'floor': f}) : s.t('home.floor.option', {'floor': f}),
-                      selected: state.floor == f,
-                    ),
+                  for (final f in const [1, 2, 3]) _floorChip(s, f, seed),
                 ],
               ),
             ),
@@ -230,6 +243,26 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Widget _floorChip(Strings s, int f, String? seed) {
+    final option = s.t('home.floor.option', {'floor': f});
+    final small = seed == 'small-target' && f == 3;
+    final chip = ChoiceChip(
+      label: Text(option),
+      selected: state.floor == f,
+      onSelected: (_) => state.setFloor(f),
+      // small-target seed: the minimum interactive size is not applied
+      materialTapTargetSize: small ? MaterialTapTargetSize.shrinkWrap : null,
+      visualDensity: small ? VisualDensity.compact : null,
+    );
+    if (seed == 'missing-state-announcement') {
+      // neither the selected state nor a text announces which floor is selected
+      return gid('home.floor.$f',
+          Semantics(button: true, label: option, onTap: () => state.setFloor(f), excludeSemantics: true, child: chip));
+    }
+    return gid('home.floor.$f', chip,
+        label: state.floor == f ? s.t('home.floor.selected', {'floor': f}) : option, selected: state.floor == f);
   }
 
   String _resultStatus(Strings s, String outcome, int count) {

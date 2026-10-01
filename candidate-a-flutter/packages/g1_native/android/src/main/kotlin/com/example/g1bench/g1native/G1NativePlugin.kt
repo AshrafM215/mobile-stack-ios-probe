@@ -177,6 +177,7 @@ class G1NativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityA
                 result.success(G1Native.importBundleBytes(zip, str(call, "source")))
             }
             "rollback" -> result.success(G1Native.rollback())
+            "removeBundles" -> result.success(G1Native.removeBundles())
             "readBundleFile" -> result.success(G1Native.readBundleFile(str(call, "path")))
             "validateQr" -> result.success(G1Native.validateQr(str(call, "payload", optional = true)))
             "decodeQrImport" -> result.success(G1Native.decodeQrImport(str(call, "name")))

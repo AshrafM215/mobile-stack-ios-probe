@@ -32,7 +32,19 @@ abstract class MapPort {
   Future<void> setRoute(Map<String, Object?> featureCollection);
   Future<void> moveCamera(double lon, double lat, double zoom, int durationMs);
   Future<void> reload(String style);
+
+  /// Shows an empty style (no bundle data on screen after bundle.remove).
+  Future<void> clear();
+
+  /// Lab hook map.inspect: the map state as the binding reports it (G1-MAP-INSPECT-1.0).
+  Future<Map<String, Object?>> inspect();
 }
+
+/// Seeded accessibility defects of the lab build (a11y.seed; detector validation of the B05 tooling, never on by default).
+const Set<String> seedDefects = {
+  'missing-label', 'duplicate-label', 'small-target', 'low-contrast', 'focus-trap', 'unlabeled-image', 'wrong-role',
+  'missing-state-announcement',
+};
 
 const String labUpdateOrigin = 'https://localhost:8443/';
 const String defaultUpdateUrl = 'https://localhost:8443/update/G1SYN-update.zip';
@@ -78,6 +90,9 @@ class AppState extends ChangeNotifier {
 
   MapPort? map;
   bool styleLoaded = false;
+
+  /// Lab hook a11y.seed: the seeded defect shown on the home screen (null: the clean reference state).
+  String? seededDefect;
   bool _homeShown = false;
   bool _ready = false;
   int _arCounter = 0;
@@ -400,6 +415,43 @@ class AppState extends ChangeNotifier {
     final code = await G1Native.rollback();
     await _afterBundleChange(code);
     return code;
+  }
+
+  /// Lab hook bundle.remove (OFF02): every stored bundle removed; the app shows its no-verified-data state on the home screen.
+  Future<String> removeBundles() async {
+    final code = await G1Native.removeBundles();
+    bundleInfo = await G1Native.bundleInfo();
+    _loadData();
+    query = '';
+    queryEpoch++;
+    results = null;
+    route = null;
+    steps = const [];
+    summary = null;
+    styleLoaded = false;
+    await map?.clear();
+    goHome();
+    return code;
+  }
+
+  /// Lab hook search.set: the query as if typed (text the input service cannot type), then the UI submit handler.
+  Future<void> setSearch(String text) async {
+    goHome();
+    setQuery(text, fromField: false);
+    await nextFrame();
+    await Future<void>(() {}); // idle point: outside the frame callback
+    submitSearch();
+  }
+
+  /// Lab hook a11y.seed: shows one seeded defect ("none" restores the clean state); G1MARK a11y.seeded after the frame.
+  Future<bool> seedDefect(String defect) async {
+    if (defect != 'none' && !seedDefects.contains(defect)) return false;
+    goHome();
+    seededDefect = defect == 'none' ? null : defect;
+    notifyListeners();
+    await nextFrame();
+    _mark('a11y.seeded', ['defect', defect]);
+    return true;
   }
 
   /// Lab update with the candidate's standard HTTP client (dart:io HttpClient), lab origin only.

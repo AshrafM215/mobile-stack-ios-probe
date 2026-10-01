@@ -25,6 +25,8 @@ export interface Spec extends TurboModule {
   importBundleFile(name: string): Promise<string>;
   importBundleBase64(zip: string, source: string): Promise<string>;
   rollback(): Promise<string>;
+  /** Lab hook bundle.remove (Android lab hook per the contract; iOS rejects with UNSUPPORTED). */
+  removeBundles(): Promise<string>;
   validateQr(payload: string | null): Promise<string>;
   decodeQrImport(name: string): Promise<string | null>;
   scanQr(requestId: string): Promise<string>;

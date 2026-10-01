@@ -169,6 +169,9 @@ public final class NativeG1Module extends NativeG1Spec implements ActivityEventL
     @Override
     public void rollback(Promise promise) { promise.resolve(G1Native.rollback()); }
 
+    @Override
+    public void removeBundles(Promise promise) { promise.resolve(G1Native.removeBundles()); }
+
     // ---------------- QR ----------------
 
     @Override

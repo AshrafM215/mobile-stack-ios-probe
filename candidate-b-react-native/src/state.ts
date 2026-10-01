@@ -17,10 +17,18 @@ export interface ScreenEntry {
   destination?: string;
 }
 
-/** Imperative camera of the map binding. */
+/** Imperative camera and inspection of the map binding. */
 export interface CameraPort {
   easeTo(lon: number, lat: number, zoom: number, durationMs: number): void;
+  /** Lab hook map.inspect: the map state as the binding reports it (G1-MAP-INSPECT-1.0). */
+  inspect(): Promise<Record<string, unknown>>;
 }
+
+/** Seeded accessibility defects of the lab build (a11y.seed; detector validation of the B05 tooling, never on by default). */
+export const SEED_DEFECTS: ReadonlySet<string> = new Set([
+  'missing-label', 'duplicate-label', 'small-target', 'low-contrast', 'focus-trap', 'unlabeled-image', 'wrong-role',
+  'missing-state-announcement',
+]);
 
 export const LAB_UPDATE_ORIGIN = 'https://localhost:8443/';
 export const DEFAULT_UPDATE_URL = 'https://localhost:8443/update/G1SYN-update.zip';
@@ -98,6 +106,8 @@ export class AppState {
 
   camera: CameraPort | null = null;
   styleLoaded = false;
+  /** Lab hook a11y.seed: the seeded defect shown on the home screen (null: the clean reference state). */
+  seededDefect: string | null = null;
   private homeShownFlag = false;
   private readyFlag = false;
   private arCounter = 0;
@@ -434,6 +444,42 @@ export class AppState {
     const code = await G1.NativeG1.rollback();
     await this.afterBundleChange(code);
     return code;
+  }
+
+  /** Lab hook bundle.remove (OFF02): every stored bundle removed; the app shows its no-verified-data state on the home screen. */
+  async removeBundles(): Promise<string> {
+    const code = await G1.NativeG1.removeBundles();
+    this.bundleInfo = await G1.bundleInfo();
+    await this.loadData(); // no verified bundle: style null, the map component is unmounted
+    this.query = '';
+    this.queryEpoch++;
+    this.results = null;
+    this.route = null;
+    this.steps = [];
+    this.summary = null;
+    this.routeFc = emptyFeatures;
+    this.styleLoaded = false;
+    this.goHome();
+    return code;
+  }
+
+  /** Lab hook search.set: the query as if typed (text the input service cannot type), then the UI submit handler. */
+  async setSearch(text: string): Promise<void> {
+    this.goHome();
+    this.setQuery(text, false);
+    await this.nextFrame();
+    await new Promise<void>((r) => setTimeout(r, 0)); // idle point: outside the frame callback
+    this.submitSearch();
+  }
+
+  /** Lab hook a11y.seed: shows one seeded defect ("none" restores the clean state); G1MARK a11y.seeded after the frame. */
+  async seedDefect(defect: string): Promise<boolean> {
+    if (defect !== 'none' && !SEED_DEFECTS.has(defect)) return false;
+    this.goHome();
+    this.seededDefect = defect === 'none' ? null : defect;
+    await this.nextFrame();
+    this.mark('a11y.seeded', ['defect', defect]);
+    return true;
   }
 
   /** Lab update with the candidate's standard HTTP client (fetch), lab origin only. */

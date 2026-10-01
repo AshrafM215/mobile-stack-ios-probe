@@ -62,3 +62,32 @@ Map<String, Object?> routeFeatures(BundleData data, RouteGraph graph, List<Strin
 }
 
 const Map<String, Object?> emptyFeatures = {'type': 'FeatureCollection', 'features': <Object?>[]};
+
+/// Empty style shown when no verified bundle is installed (bundle.remove): nothing of a removed bundle stays on screen.
+String emptyStyle(List<num> center, num zoom) => jsonEncode({
+      'version': 8,
+      'center': center,
+      'zoom': zoom,
+      'sources': <String, Object?>{},
+      'layers': [
+        {'id': 'background', 'type': 'background', 'paint': {'background-color': '#EEF1F4'}},
+      ],
+    });
+
+/// Layers reported by map.inspect (G1-MAP-INSPECT-1.0).
+const List<String> inspectLayers = ['floors', 'rooms', 'pois', 'room-labels', 'route'];
+
+/// The floor n of the first `["==", ["get", "floor"], n]` test in a filter expression as returned by the binding.
+int? floorOfFilter(Object? expr) {
+  if (expr is List) {
+    if (expr.length == 3 && expr[0] == '==' && expr[1] is List && (expr[1] as List).length == 2 &&
+        (expr[1] as List)[0] == 'get' && (expr[1] as List)[1] == 'floor' && expr[2] is num) {
+      return (expr[2] as num).toInt();
+    }
+    for (final e in expr) {
+      final f = floorOfFilter(e);
+      if (f != null) return f;
+    }
+  }
+  return null;
+}

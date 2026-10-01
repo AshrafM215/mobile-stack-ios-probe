@@ -1,8 +1,20 @@
 // Candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Screens S01-S09 of G1-CIC-1.0 plus the anchor-code result and data/trust screens. Every contract id is a testID
 // (resource-id on Android, accessibilityIdentifier on iOS).
-import React, { createContext, useContext, useLayoutEffect, useMemo } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
+import React, { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  FlatList,
+  findNodeHandle,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppState } from '../state';
@@ -44,15 +56,19 @@ function Btn(props: {
   selected?: boolean;
   outline?: boolean;
   role?: 'button' | 'radio';
+  /** seeded defects only (a11y.seed): no minimum target size / no exposed state */
+  small?: boolean;
+  noState?: boolean;
 }) {
-  const { id, label, onPress, disabled, a11yLabel, selected, outline, role } = props;
+  const { id, label, onPress, disabled, a11yLabel, selected, outline, role, small, noState } = props;
   const filled = !outline && !selected;
+  const a11yState = noState ? {} : role === 'radio' ? { checked: !!selected, disabled: !!disabled } : { selected: !!selected, disabled: !!disabled };
   return (
     <Pressable
       testID={id}
       accessibilityRole={role ?? 'button'}
       accessibilityLabel={a11yLabel ?? label}
-      accessibilityState={role === 'radio' ? { checked: !!selected, disabled: !!disabled } : { selected: !!selected, disabled: !!disabled }}
+      accessibilityState={a11yState}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -61,9 +77,10 @@ function Btn(props: {
         selected && ui.btnSelected,
         disabled && ui.btnDisabled,
         pressed && ui.pressed,
+        small && ui.btnSmall,
       ]}
     >
-      <Text style={[ui.btnText, filled ? ui.btnTextFilled : ui.btnTextOutline]}>{label}</Text>
+      <Text style={[ui.btnText, filled ? ui.btnTextFilled : ui.btnTextOutline, small && ui.btnTextSmall]}>{label}</Text>
     </Pressable>
   );
 }
@@ -104,6 +121,13 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
   // the field's initial text changes only with a programmatic change (queryEpoch), never while the user types
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fieldInitialText = useMemo(() => state.query, [state.queryEpoch]);
+  // lab build only: one seeded accessibility defect (a11y.seed) for detector validation; null is the clean reference state
+  const seed = state.seededDefect;
+  const field = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const [fieldTag, setFieldTag] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    setFieldTag(findNodeHandle(field.current) ?? null);
+  }, [state.queryEpoch]);
   return (
     <View
       style={ui.fill}
@@ -112,15 +136,22 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
       pointerEvents={covered ? 'none' : 'auto'}
     >
       <View style={ui.header}>
+        {seed === 'unlabeled-image' ? <View testID="home.seed.image" accessible accessibilityRole="image" style={ui.seedImage} /> : null}
         <T id="home.title" style={ui.headerTitle}>
           {s.t('app.title')}
         </T>
         <Btn id="home.lang" label={s.t('lang.toggle')} a11yLabel={s.t('lang.toggle.a11y')} onPress={state.toggleLang} outline />
-        <Btn id="home.qr" label={s.t('home.qr.scan')} onPress={() => void state.scanQr()} outline />
-        <Btn id="home.settings" label={s.t('home.settings')} onPress={state.openSettings} outline />
+        <Btn id="home.qr" label={seed === 'duplicate-label' ? s.t('home.settings') : s.t('home.qr.scan')} onPress={() => void state.scanQr()} outline />
+        {seed === 'wrong-role' ? (
+          <View testID="home.settings" accessible onTouchEnd={state.openSettings} style={[ui.btn, ui.btnOutline]}>
+            <Text style={[ui.btnText, ui.btnTextOutline]}>{s.t('home.settings')}</Text>
+          </View>
+        ) : (
+          <Btn id="home.settings" label={s.t('home.settings')} onPress={state.openSettings} outline />
+        )}
       </View>
       <T style={ui.small}>{s.t('app.subtitle')}</T>
-      <T id="home.trust" style={ui.pad}>
+      <T id="home.trust" style={[ui.pad, seed === 'low-contrast' && ui.seedLowContrast]}>
         {trustText(s, state.bundleInfo)}
       </T>
       <View style={ui.row}>
@@ -131,6 +162,9 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
             the initial text is therefore fixed per epoch. */}
         <TextInput
           key={state.queryEpoch}
+          ref={field}
+          // focus-trap seed: TAB moves keyboard focus to the field itself
+          nextFocusForward={seed === 'focus-trap' && fieldTag !== null ? fieldTag : undefined}
           testID="home.search.field"
           accessibilityLabel={s.t('home.search.label')}
           placeholder={s.t('home.search.hint')}
@@ -144,8 +178,24 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
           autoCapitalize="none"
           style={[ui.input, { textAlign: state.s.rtl ? 'right' : 'left' }]}
         />
-        {state.query.length > 0 ? <Btn id="home.search.clear" label={s.t('home.search.clear')} onPress={state.clearSearch} outline /> : null}
-        <Btn id="home.search.submit" label={s.t('home.search.submit')} onPress={() => state.submitSearch()} disabled={!enabled} />
+        {/* The clear control's slot is always laid out (hidden and inert while the query is empty): the first typed
+            character must not change the row's structure (the slot is never flattened either). Inserting the control at
+            that moment dropped the characters typed meanwhile (iOS end-to-end probe: "SB1-F1-R001" arrived as "SR001"). */}
+        <View
+          collapsable={false}
+          style={state.query.length > 0 ? null : ui.hiddenSlot}
+          pointerEvents={state.query.length > 0 ? 'auto' : 'none'}
+          importantForAccessibility={state.query.length > 0 ? 'auto' : 'no-hide-descendants'}
+          accessibilityElementsHidden={state.query.length === 0}
+        >
+          <Btn id="home.search.clear" label={s.t('home.search.clear')} onPress={state.clearSearch} outline />
+        </View>
+        <Btn
+          id="home.search.submit"
+          label={seed === 'missing-label' ? '' : s.t('home.search.submit')}
+          onPress={() => state.submitSearch()}
+          disabled={!enabled}
+        />
       </View>
       <View style={ui.results}>
         {results === null ? (
@@ -187,10 +237,16 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
             key={f}
             id={`home.floor.${f}`}
             label={s.t('home.floor.option', { floor: f })}
-            a11yLabel={state.floor === f ? s.t('home.floor.selected', { floor: f }) : s.t('home.floor.option', { floor: f })}
+            a11yLabel={
+              state.floor === f && seed !== 'missing-state-announcement'
+                ? s.t('home.floor.selected', { floor: f })
+                : s.t('home.floor.option', { floor: f })
+            }
             selected={state.floor === f}
             onPress={() => state.setFloor(f)}
             outline
+            small={seed === 'small-target' && f === 3}
+            noState={seed === 'missing-state-announcement'}
           />
         ))}
       </View>
@@ -488,4 +544,10 @@ const ui = StyleSheet.create({
   btnTextFilled: { color: C.onPrimary },
   btnTextOutline: { color: C.primary },
   pressed: { opacity: 0.7 },
+  hiddenSlot: { opacity: 0 },
+  // seeded defects (a11y.seed) only
+  btnSmall: { minHeight: 0, minWidth: 0, paddingHorizontal: 4, paddingVertical: 0 },
+  btnTextSmall: { fontSize: 12 },
+  seedImage: { width: 24, height: 24, backgroundColor: C.primary },
+  seedLowContrast: { color: '#b0b0b0' },
 });

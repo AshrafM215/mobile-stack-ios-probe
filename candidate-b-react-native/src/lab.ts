@@ -13,7 +13,8 @@ import { decodeUtf8 } from './core/utf8';
 export const LAB_COMMANDS: ReadonlySet<string> = new Set([
   'bench.search-route', 'bench.bridge', 'bench.ui-session', 'bench.idle', 'nav.home', 'nav.details', 'nav.route',
   'nav.open-route-ar', 'lang.set', 'bundle.import', 'bundle.rollback', 'bundle.update', 'qr.inject', 'ar.inject',
-  'session.start', 'session.end', 'session.status', 'crash', 'fuzz', 'bridge.attack',
+  'session.start', 'session.end', 'session.status', 'crash', 'fuzz', 'bridge.attack', 'search.set', 'a11y.seed',
+  'bundle.remove', 'map.inspect', 'map.camera',
 ]);
 
 type Keyframe =
@@ -204,7 +205,47 @@ export class LabController {
       case 'bridge.attack':
         await this.attack(str('run_id'), str('case'));
         break;
+      case 'search.set':
+        await s.setSearch(str('text'));
+        break;
+      case 'a11y.seed':
+        if (!(await s.seedDefect(str('defect')))) this.mark('command.rejected', ['reason', 'unknown_defect']);
+        break;
+      case 'bundle.remove':
+        await s.removeBundles();
+        break;
+      case 'map.inspect':
+        await this.mapInspect(str('run_id'));
+        break;
+      case 'map.camera':
+        await this.mapCamera(a);
+        break;
     }
+  }
+
+  // ---------------------------------------------------------------- B02 map inspection (G1-MAP-INSPECT-1.0)
+
+  /** Registered render view: home screen, the floor through the UI handler, the camera moved without animation. */
+  private async mapCamera(a: Record<string, unknown>): Promise<void> {
+    const s = this.state;
+    const { x_mm: x, y_mm: y, zoom, floor } = a;
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y) || typeof zoom !== 'number') throw new FormatError('arg camera');
+    s.goHome();
+    if (Number.isSafeInteger(floor)) s.setFloor(floor as number);
+    s.camera?.easeTo(lonOf(x as number), latOf(y as number), zoom, 1); // same minimal duration as A and C
+    await s.nextFrame();
+    await s.nextFrame();
+    this.mark('map.camera.done', ['floor', String(s.floor)]);
+  }
+
+  private async mapInspect(runId: string): Promise<void> {
+    const s = this.state;
+    this.mark('run.start', ['run', runId, 'map', 'inspect']);
+    await s.nextFrame();
+    const m = s.camera ? await s.camera.inspect() : { available: false };
+    await G1.NativeG1.writeOut(`${runId}.json`, JSON.stringify({ contract: 'G1-MAP-INSPECT-1.0', run_id: runId, app: 'B', app_floor: s.floor,
+      app_lang: s.lang, ...m }));
+    this.mark('run.done', ['run', runId, 'map', 'inspect']);
   }
 
   private routeCase(id: unknown): RouteCase | undefined {
@@ -510,6 +551,8 @@ export class LabController {
       const code = typeof b64 === 'string' ? await this.fuzzOne(target, decodeBase64(b64)) : 'REJECT_CORPUS';
       outcomes[code] = (outcomes[code] ?? 0) + 1;
       perInput.push(code);
+      // TH-FUZ-04 hang bound: the harness requires progress within 10 s of every input
+      this.mark('fuzz.progress', ['run', runId, 'n', String(perInput.length)]);
     }
     const unexpected = perInput.filter((c) => c.startsWith('UNEXPECTED_')).length;
     await G1.NativeG1.writeOut(`${runId}.json`, JSON.stringify({ contract: 'G1-FUZZ-1.0', run_id: runId, app: 'B', target,

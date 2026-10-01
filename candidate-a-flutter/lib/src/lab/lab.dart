@@ -15,7 +15,8 @@ import '../core/crc32.dart';
 const Set<String> labCommands = {
   'bench.search-route', 'bench.bridge', 'bench.ui-session', 'bench.idle', 'nav.home', 'nav.details', 'nav.route',
   'nav.open-route-ar', 'lang.set', 'bundle.import', 'bundle.rollback', 'bundle.update', 'qr.inject', 'ar.inject',
-  'session.start', 'session.end', 'session.status', 'crash', 'fuzz', 'bridge.attack',
+  'session.start', 'session.end', 'session.status', 'crash', 'fuzz', 'bridge.attack', 'search.set', 'a11y.seed',
+  'bundle.remove', 'map.inspect', 'map.camera',
 };
 
 /// G1-UI-SCRIPT-1.0 keyframes (contract ui_session_script; checked against contract.json by the unit tests).
@@ -153,7 +154,46 @@ class LabController {
         await _fuzz(str('run_id'), str('target'), str('corpus'));
       case 'bridge.attack':
         await _attack(str('run_id'), str('case'));
+      case 'search.set':
+        await state.setSearch(str('text'));
+      case 'a11y.seed':
+        if (!await state.seedDefect(str('defect'))) await _mark('command.rejected', ['reason', 'unknown_defect']);
+      case 'bundle.remove':
+        await state.removeBundles();
+      case 'map.inspect':
+        await _mapInspect(str('run_id'));
+      case 'map.camera':
+        await _mapCamera(a);
     }
+  }
+
+  // ---------------------------------------------------------------- B02 map inspection (G1-MAP-INSPECT-1.0)
+
+  /// Registered render view: home screen, the floor through the UI handler, the camera moved without animation.
+  Future<void> _mapCamera(Map<String, Object?> a) async {
+    final x = a['x_mm'], y = a['y_mm'], zoom = a['zoom'], floor = a['floor'];
+    if (x is! int || y is! int || zoom is! num) throw const FormatException('arg camera');
+    state.goHome();
+    if (floor is int) state.setFloor(floor);
+    await state.map?.moveCamera(lonOf(x), latOf(y), zoom.toDouble(), 1); // the binding requires a positive duration
+    await state.nextFrame();
+    await state.nextFrame();
+    await _mark('map.camera.done', ['floor', '${state.floor}']);
+  }
+
+  Future<void> _mapInspect(String runId) async {
+    await _mark('run.start', ['run', runId, 'map', 'inspect']);
+    await state.nextFrame();
+    final m = await state.map?.inspect() ?? const {'available': false};
+    await G1Native.writeOut('$runId.json', jsonEncode({
+      'contract': 'G1-MAP-INSPECT-1.0',
+      'run_id': runId,
+      'app': 'A',
+      'app_floor': state.floor,
+      'app_lang': state.lang,
+      ...m,
+    }));
+    await _mark('run.done', ['run', runId, 'map', 'inspect']);
   }
 
   RouteCase? _case(Object? id) => id is String ? state.data?.routeCases.where((c) => c.id == id).firstOrNull : null;
@@ -462,6 +502,8 @@ class LabController {
       final code = await _fuzzOne(target, base64Decode(b64));
       outcomes[code] = (outcomes[code] ?? 0) + 1;
       perInput.add(code);
+      // TH-FUZ-04 hang bound: the harness requires progress within 10 s of every input
+      unawaited(_mark('fuzz.progress', ['run', runId, 'n', '${perInput.length}']));
     }
     final unexpected = perInput.where((c) => c.startsWith('UNEXPECTED_')).length;
     await G1Native.writeOut('$runId.json', jsonEncode({'contract': 'G1-FUZZ-1.0', 'run_id': runId, 'app': 'A', 'target': target,

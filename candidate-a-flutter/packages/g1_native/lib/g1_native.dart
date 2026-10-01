@@ -139,6 +139,9 @@ class G1Native {
 
   static Future<String> rollback() async => (await _call<String>('rollback'))!;
 
+  /// Lab hook bundle.remove (Android lab hook; the common module removes every stored bundle).
+  static Future<String> removeBundles() async => (await _call<String>('removeBundles'))!;
+
   static Future<Map<String, Object?>> validateQr(String? payload) async =>
       jsonDecode((await _call<String>('validateQr', {'payload': payload}))!) as Map<String, Object?>;
 

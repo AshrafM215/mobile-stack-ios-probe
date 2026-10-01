@@ -170,7 +170,11 @@ final class CoreTests: XCTestCase {
 
     func testLabHooksMatchTheContract() throws {
         let contract = try JSON.decode(CoreData.text(CoreData.root.appendingPathComponent("contract/contract.json"))) as! [String: Any]
-        let commands = ((contract["lab_hooks"] as! [String: Any])["commands"] as! [String: Any]).keys
+        // hooks marked "platforms": ["android"] belong to the Android-only harness case families
+        let commands = ((contract["lab_hooks"] as! [String: Any])["commands"] as! [String: Any]).filter { _, spec in
+            guard let platforms = (spec as? [String: Any])?["platforms"] as? [String] else { return true }
+            return platforms.contains("ios")
+        }.keys
         XCTAssertEqual(Set(commands), labCommands)
         let keyframes = (contract["ui_session_script"] as! [String: Any])["keyframes"] as! [[String: Any]]
         XCTAssertEqual(keyframes.count, uiScript.count)
