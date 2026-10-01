@@ -14,6 +14,9 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://example.invalid/g1-native.git", :tag => s.version.to_s }
   s.source_files = "ios/**/*.{h,m,mm}"
   s.dependency "G1NativeCommon"
+  # The Swift common module is a static library pod: CocoaPods copies its generated Objective-C header into
+  # "<build products>/G1NativeCommon/Swift Compatibility Header", which RCTNativeG1.mm imports as "G1NativeCommon-Swift.h".
+  s.pod_target_xcconfig = { "HEADER_SEARCH_PATHS" => '"${PODS_CONFIGURATION_BUILD_DIR}/G1NativeCommon/Swift Compatibility Header"' }
 
   install_modules_dependencies(s)
 end
