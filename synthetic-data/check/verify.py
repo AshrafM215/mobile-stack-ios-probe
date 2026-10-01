@@ -167,6 +167,46 @@ def route_oracle(adj, origin, target, step_free, blocked):
     return {'outcome': 'REJECT_UNREACHABLE'}, None
 
 
+# ---------------- route steps (G1-ROUTE-STEPS-1.0), written independently of src/steps.mjs ----------------
+def route_steps(nodes, edge_by_pair, path, code):
+    out, acc, total = [], 0, 0
+
+    def whole(mm):
+        return (mm + 500) // 1000
+
+    def flush():
+        nonlocal acc
+        if acc > 0:
+            out.append({'kind': 'walk', 'm': whole(acc)})
+        acc = 0
+
+    for a, b in zip(path, path[1:]):
+        e = edge_by_pair[(a, b)]
+        total += e['length_mm']
+        if e['kind'] in ('corridor', 'spur', 'outdoor'):
+            acc += e['length_mm']
+        elif e['kind'] == 'entrance':
+            acc += e['length_mm']
+            flush()
+            inside_a = nodes[a].get('building') is not None
+            inside_b = nodes[b].get('building') is not None
+            check(inside_a != inside_b, 'entrance joins indoor and outdoor ' + e['id'])
+            out.append({'kind': 'exit', 'building': nodes[a]['building']} if inside_a else {'kind': 'enter', 'building': nodes[b]['building']})
+        elif e['kind'] in ('stairs', 'elevator'):
+            flush()
+            out.append({'kind': e['kind'], 'floor': nodes[b]['floor']})
+        else:
+            check(False, 'unknown edge kind ' + e['kind'])
+    flush()
+    out.append({'kind': 'arrive', 'code': code})
+    seen_floors = []
+    for n in path:
+        f = nodes[n].get('floor')
+        if f is not None and f not in seen_floors:
+            seen_floors.append(f)
+    return {'steps': out, 'summary': {'length_m': whole(total), 'steps': len(out), 'floors': '-'.join(str(f) for f in seen_floors)}}
+
+
 # ---------------- trust contract ----------------
 def verify_bundle(zbytes, store, now, active_version, high_water=None):
     try:
@@ -346,11 +386,16 @@ def main(out):
     ro_bytes = open(f'{out}/oracle/route_oracle.json', 'rb').read()
     ro = json.loads(ro_bytes)
     dnode = {d['id']: d['node'] for d in dest}
+    dcode = {d['id']: d['code'] for d in dest}
+    edge_by_pair = {(e['from'], e['to']): e for e in graph['edges']}
+    check(ro.get('steps_contract') == 'G1-ROUTE-STEPS-1.0', 'route oracle names the steps contract')
     results = []
     for c, expect in zip(cases, ro['results']):
         res, detail = route_oracle(adj, c['origin'], dnode[c['destination']], c['step_free'], set(c['blocked']))
         if detail:
             check(detail['unique'], 'unique shortest path ' + c['id'])
+            check(detail['length_mm'] == sum(edge_by_pair[(a, b)]['length_mm'] for a, b in zip(detail['nodes'], detail['nodes'][1:])), 'path length ' + c['id'])
+            res.update(route_steps(nodes, edge_by_pair, res['nodes'], dcode[c['destination']]))
         results.append({'id': c['id'], 'class': expect['class'], **res})
     check(results == ro['results'], 'route oracle re-derived by exhaustive enumeration')
     rebuilt = dict(ro)

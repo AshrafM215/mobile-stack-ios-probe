@@ -1,0 +1,634 @@
+{
+  "contract": "G1-CIC-1.0",
+  "label": "NON-PRODUCTION / SYNTHETIC DATA ONLY",
+  "status": "IMPLEMENTATION CONTRACT; binding for candidates A, B and C and for the harness",
+  "candidates": {
+    "A": {
+      "stack": "Flutter 3.47.5 (Dart 3.13.4)",
+      "android_id": "com.example.g1bench.candidatea",
+      "ios_id": "com.example.g1bench.candidatea",
+      "url_scheme": "g1bench-a",
+      "runtime_bridge": "MethodChannel/EventChannel (async) + dart:ffi for the monotonic clock"
+    },
+    "B": {
+      "stack": "React Native 0.87.1 (Hermes, New Architecture)",
+      "android_id": "com.example.g1bench.candidateb",
+      "ios_id": "com.example.g1bench.candidateb",
+      "url_scheme": "g1bench-b",
+      "runtime_bridge": "TurboModule NativeG1 (JSI; synchronous where the method is declared sync) + codegen event emitters"
+    },
+    "C": {
+      "stack": "Kotlin 2.4.20 + Jetpack Compose (Android) / Swift + SwiftUI (iOS)",
+      "android_id": "com.example.g1bench.candidatec",
+      "ios_id": "com.example.g1bench.candidatec",
+      "url_scheme": "g1bench-c",
+      "runtime_bridge": "direct calls into the same common module interface (equivalent internal boundary, protocol B11)"
+    }
+  },
+  "platform_floor": {
+    "android_min_sdk": 24,
+    "ios_deployment_target": "16.0",
+    "orientation": "portrait and landscape",
+    "appearance": "light only"
+  },
+  "shared_inputs": {
+    "bundle": "synthetic-data/out/bundle/G1SYN-1.0.0.zip (installed on first launch through the common trust module)",
+    "trust_store": "synthetic-data/out/app/trust_store.json (compiled into every build)",
+    "strings": [
+      "contract/strings/en.json",
+      "contract/strings/ar.json"
+    ],
+    "data_contracts": {
+      "search": "G1-SEARCH-1.0",
+      "route": "G1-ROUTE-1.0",
+      "route_steps": "G1-ROUTE-STEPS-1.0",
+      "qr": "G1-QR-1.0",
+      "trust": "G1-TRUST-1.0",
+      "style": "G1-STYLE-1.0"
+    }
+  },
+  "common_native_module": {
+    "android": "spikes/native-common/android (Gradle library g1-native-common, Kotlin)",
+    "ios": "spikes/native-common/ios (Swift package G1NativeCommon; CocoaPods podspec for B)",
+    "owns": [
+      "monotonic clock and G1MARK trace",
+      "bundle install/verify/activate/import (G1-TRUST-1.0) and trusted-time high-water mark",
+      "QR payload validation (G1-QR-1.0), injected image decode (ZXing core 3.5.4 / Vision) and the camera scanner (CameraX + ZXing / AVFoundation)",
+      "AR availability, the full-screen native AR screen and the injected AR provider",
+      "bridge workload echo/CRC-32 worker and native-to-runtime emitter",
+      "secure session marker storage (Android Keystore / iOS Keychain)",
+      "native crash triggers",
+      "lab file locations (import/out)"
+    ],
+    "runtime_owns": [
+      "UI, navigation and state",
+      "search (G1-SEARCH-1.0) and routing (G1-ROUTE-1.0) in the candidate runtime",
+      "route step text (G1-ROUTE-STEPS-1.0)",
+      "map integration through the candidate's MapLibre binding",
+      "i18n (in-app ar/en switch with RTL/LTR)",
+      "lab update download with the candidate's standard HTTP client",
+      "bench loops",
+      "graph JSON parsing and bridge message decoding (fuzz targets FUZ02/FUZ03)"
+    ],
+    "duplicate_request": "a QR or AR request id already in flight is refused with DUPLICATE_REQUEST (QR callback error / AR error event) before any camera or screen is opened (BRG07)"
+  },
+  "ids": {
+    "home.title": "App title text",
+    "home.lang": "Language toggle button (ar<->en)",
+    "home.trust": "Trust/offline status text",
+    "home.settings": "Data and trust button",
+    "home.qr": "Scan anchor code button",
+    "home.search.field": "Search text field",
+    "home.search.submit": "Search button",
+    "home.search.clear": "Clear search button",
+    "home.results.status": "Result status text",
+    "home.results.list": "Results container",
+    "home.result.<DESTINATION_ID>": "One result row, e.g. home.result.D014",
+    "home.empty": "Empty-state text",
+    "home.map": "Map container (labelled text alternative)",
+    "home.floor.1": "Floor 1 button",
+    "home.floor.2": "Floor 2 button",
+    "home.floor.3": "Floor 3 button",
+    "details.back": "Back",
+    "details.code": "Code value",
+    "details.name": "Name value",
+    "details.building": "Building value",
+    "details.floor": "Floor value",
+    "details.status": "Reachability status",
+    "details.schedule.list": "Schedule list",
+    "details.schedule.item.<COURSE_CODE>": "Schedule row, e.g. details.schedule.item.SYN-COURSE-007",
+    "details.schedule.none": "No-schedule text",
+    "details.route": "Directions button",
+    "details.showmap": "Show on map button",
+    "route.back": "Back",
+    "route.from.<NODE_ID>": "Origin option (entrances N0001, N0289, N1000, N1288, N1987, N2275)",
+    "route.to": "Destination text",
+    "route.stepfree": "Step-free switch",
+    "route.compute": "Get directions button",
+    "route.trust": "Trust state line",
+    "route.summary": "Route summary text",
+    "route.steps": "Step list container",
+    "route.step.<INDEX>": "Step row (0-based)",
+    "route.reject": "Rejection explanation text",
+    "route.ar": "Open AR button",
+    "ar.status": "AR status text (native screen)",
+    "ar.close": "Close AR (native screen)",
+    "fallback.title": "Fallback title",
+    "fallback.message": "Why the fallback is shown",
+    "fallback.steps": "Text directions container",
+    "fallback.back": "Back to map",
+    "qr.result": "Anchor code result text",
+    "qr.close": "Close",
+    "settings.back": "Back",
+    "settings.version": "Installed data version",
+    "settings.validity": "Validity text",
+    "settings.status": "Trust status",
+    "settings.update": "Check for lab update",
+    "settings.update.status": "Update progress/status",
+    "settings.result": "Last import/update result explanation",
+    "ar.arrow": "Guidance arrow (native screen; visible only while TRACKING, pose established and guidance allowed)"
+  },
+  "screens": {
+    "S01": {
+      "name": "search-home",
+      "ids": [
+        "home.title",
+        "home.lang",
+        "home.trust",
+        "home.settings",
+        "home.qr",
+        "home.search.field",
+        "home.search.submit",
+        "home.empty",
+        "home.map"
+      ]
+    },
+    "S02": {
+      "name": "results-list",
+      "ids": [
+        "home.search.field",
+        "home.search.clear",
+        "home.results.status",
+        "home.results.list",
+        "home.result.<DESTINATION_ID>"
+      ]
+    },
+    "S03": {
+      "name": "map-floor",
+      "ids": [
+        "home.map",
+        "home.floor.1",
+        "home.floor.2",
+        "home.floor.3"
+      ]
+    },
+    "S04": {
+      "name": "destination",
+      "ids": [
+        "details.back",
+        "details.code",
+        "details.name",
+        "details.building",
+        "details.floor",
+        "details.status",
+        "details.route",
+        "details.showmap"
+      ]
+    },
+    "S05": {
+      "name": "schedule",
+      "ids": [
+        "details.schedule.list",
+        "details.schedule.item.<COURSE_CODE>",
+        "details.schedule.none"
+      ]
+    },
+    "S06": {
+      "name": "floor-switch",
+      "ids": [
+        "home.floor.1",
+        "home.floor.2",
+        "home.floor.3",
+        "home.map"
+      ]
+    },
+    "S07": {
+      "name": "route-trust",
+      "ids": [
+        "route.back",
+        "route.from.<NODE_ID>",
+        "route.to",
+        "route.stepfree",
+        "route.compute",
+        "route.trust",
+        "route.summary",
+        "route.steps",
+        "route.reject",
+        "route.ar"
+      ]
+    },
+    "S08": {
+      "name": "ar-view",
+      "ids": [
+        "ar.status",
+        "ar.arrow",
+        "ar.close"
+      ],
+      "owner": "native-common (full-screen native AR or the native unsupported notice)",
+      "native_ids": {
+        "android": "resource ids ar_status, ar_arrow, ar_close (Android resource names cannot contain dots)",
+        "ios": "accessibilityIdentifier ar.status, ar.arrow, ar.close"
+      }
+    },
+    "S09": {
+      "name": "text-fallback",
+      "ids": [
+        "fallback.title",
+        "fallback.message",
+        "fallback.steps",
+        "fallback.back"
+      ]
+    }
+  },
+  "tasks": {
+    "T01": "open-search-directory",
+    "T02": "distinguish-duplicate-codes",
+    "T03": "inspect-destination",
+    "T04": "switch-floor",
+    "T05": "read-schedule",
+    "T06": "constrained-step-free-route",
+    "T07": "reject-unknown-or-blocked-route",
+    "T08": "use-text-alternative",
+    "T09": "camera-only-on-qr-ar-entry",
+    "T10": "recover-denied-permission",
+    "T11": "recover-lost-tracking",
+    "T12": "recover-stale-offline-data",
+    "T13": "recover-background-resume",
+    "T14": "switch-language-keep-state"
+  },
+  "transitions": {
+    "X1": "launch-to-search",
+    "X2": "search-to-details",
+    "X3": "details-to-schedule",
+    "X4": "schedule-to-floor",
+    "X5": "floor-to-route",
+    "X6": "route-to-ar",
+    "X7": "ar-to-fallback"
+  },
+  "id_mapping": {
+    "android": "resource-id (Flutter Semantics.identifier; React Native testID; Compose testTag with testTagsAsResourceId)",
+    "ios": "accessibilityIdentifier (Flutter Semantics.identifier; React Native testID; SwiftUI accessibilityIdentifier)"
+  },
+  "ready_predicate": {
+    "definition": "READY = verified active bundle loaded AND search index built AND home screen shown with the search field enabled AND map style loaded for the initial floor",
+    "signals": {
+      "android": "Activity.reportFullyDrawn() once per process + G1MARK app.ready",
+      "ios": "G1MARK app.ready"
+    },
+    "resume": "RESUME_READY = after a foreground return, the home (or retained) screen is interactive and the map surface is restored; G1MARK app.resume.ready"
+  },
+  "markers": {
+    "format": "G1MARK v=1 app=<A|B|C> seq=<n> name=<name> t=<native ns> rt=<runtime ns | -> [key=value ...]  (keys and values encoded like java.net.URLEncoder UTF-8; no user-entered text, no payloads, only ids, codes, enums and numbers)",
+    "clock": {
+      "android": "CLOCK_BOOTTIME (SystemClock.elapsedRealtimeNanos)",
+      "ios": "clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) (mach_continuous_time base; includes sleep like CLOCK_BOOTTIME)",
+      "runtime_access": {
+        "A": "dart:ffi clock_gettime(CLOCK_BOOTTIME | CLOCK_MONOTONIC_RAW)",
+        "B": "JSI synchronous nowNanos()",
+        "C": "direct"
+      }
+    },
+    "sink": {
+      "android": "logcat tag G1MARK, priority INFO",
+      "ios": "unified log subsystem com.example.g1bench, category G1MARK (public)"
+    },
+    "names": [
+      "app.start",
+      "app.ready",
+      "app.resume.ready",
+      "bundle.loaded",
+      "bundle.result",
+      "map.style.loaded",
+      "screen.shown",
+      "floor.changed",
+      "lang.changed",
+      "search.result",
+      "route.result",
+      "qr.validated",
+      "qr.result",
+      "ar.state",
+      "ar.arrow",
+      "fallback.shown",
+      "session.state",
+      "update.state",
+      "run.start",
+      "run.done",
+      "session.window",
+      "crash.trigger",
+      "command.received",
+      "command.rejected"
+    ]
+  },
+  "lab_hooks": {
+    "build_flag": "G1_LAB=1 in every benchmark lab build (identical hook surface in A, B and C; inspected by the B16 cases)",
+    "transport": {
+      "android": "Intent extras on the launcher activity (singleTop): g1.cmd (string) and g1.args (JSON object string); delivered at launch or through onNewIntent",
+      "ios": "launch arguments -g1.cmd <cmd> -g1.args <json>, or URL <scheme>://cmd?name=<cmd>&args=<url-encoded json> for a running app"
+    },
+    "files": {
+      "android_import": "<getExternalFilesDir(null)>/g1/import/",
+      "android_out": "<getExternalFilesDir(null)>/g1/out/",
+      "ios_import": "Documents/g1/import/",
+      "ios_out": "Documents/g1/out/"
+    },
+    "commands": {
+      "bench.search-route": {
+        "args": {
+          "run_id": "string",
+          "kind": "warmup|measured"
+        },
+        "effect": "500 queries then 30 routes in the saved order through the UI submit path in one process; writes out/<run_id>.json; G1MARK run.done"
+      },
+      "bench.bridge": {
+        "args": {
+          "run_id": "string",
+          "workload": "R2N.64B.async|R2N.4KiB.async|R2N.64KiB.async|N2R.64B.async|N2R.4KiB.async|N2R.64KiB.async|R2N.64B.sync",
+          "order": "control-first|measured-first",
+          "messages": 1000,
+          "rate_hz": 200
+        },
+        "effect": "null-control series and measured series back to back; writes out/<run_id>.json; UNSUPPORTED outcome where no synchronous path exists (A)"
+      },
+      "bench.ui-session": {
+        "args": {
+          "session_id": "string",
+          "warmup_s": 60,
+          "measure_s": 300
+        },
+        "effect": "runs ui_session_script; G1MARK session.window (warmup.start, measure.start, end)"
+      },
+      "bench.idle": {
+        "args": {
+          "session_id": "string",
+          "warmup_s": 60,
+          "measure_s": 300
+        },
+        "effect": "static home map for the window; G1MARK session.window"
+      },
+      "nav.home": {
+        "args": {},
+        "effect": "return to the home map (language and floor kept)"
+      },
+      "nav.details": {
+        "args": {
+          "destination": "Dnnn"
+        },
+        "effect": "open destination details"
+      },
+      "nav.route": {
+        "args": {
+          "case": "RTnn | null",
+          "destination": "Dnnn",
+          "origin": "Nnnnn",
+          "step_free": "bool"
+        },
+        "effect": "open the route screen and compute"
+      },
+      "nav.open-route-ar": {
+        "args": {
+          "case": "RTnn"
+        },
+        "effect": "route for the case, then Open AR (native AR or the accessible fallback)"
+      },
+      "lang.set": {
+        "args": {
+          "lang": "ar|en"
+        },
+        "effect": "same as the in-app toggle"
+      },
+      "bundle.import": {
+        "args": {
+          "file": "name in the import directory"
+        },
+        "effect": "common trust module import; result screen; G1MARK bundle.result"
+      },
+      "bundle.rollback": {
+        "args": {},
+        "effect": "common trust module rollback to the retained previous bundle (re-verified now); result screen; G1MARK bundle.result"
+      },
+      "bundle.update": {
+        "args": {
+          "url": "https://g1lab.test:8443/... (lab endpoint only)"
+        },
+        "effect": "download with the candidate's standard HTTP client, then common import; G1MARK update.state/bundle.result"
+      },
+      "qr.inject": {
+        "args": {
+          "file": "PNG in the import directory"
+        },
+        "effect": "common decoder -> payload -> common validation -> candidate result screen; G1MARK qr.result (SIMULATED provenance)"
+      },
+      "ar.inject": {
+        "args": {
+          "script": "[[state, at_ms], ...] with state in TRACKING|LIMITED|LOST|PAUSED",
+          "case": "RTnn"
+        },
+        "effect": "injected AR provider drives the common native AR screen; G1MARK ar.state / ar.arrow"
+      },
+      "session.start": {
+        "args": {
+          "marker": "synthetic canary"
+        },
+        "effect": "secure session marker stored through the common secure storage"
+      },
+      "session.end": {
+        "args": {},
+        "effect": "logout: marker removed and key material invalidated"
+      },
+      "session.status": {
+        "args": {},
+        "effect": "G1MARK session.state active|inactive (marker value never logged)"
+      },
+      "crash": {
+        "args": {
+          "case": "CR1|CR2|CR3|CR4|CR6",
+          "canary": "synthetic canary"
+        },
+        "effect": "synthetic failure per crash_fixtures"
+      },
+      "fuzz": {
+        "args": {
+          "run_id": "string",
+          "target": "FUZ01|FUZ02|FUZ03",
+          "corpus": "file in the import directory"
+        },
+        "effect": "every input through the target parser; writes out/<run_id>.json"
+      },
+      "bridge.attack": {
+        "args": {
+          "run_id": "string",
+          "case": "BRG01..BRG07"
+        },
+        "effect": "crafted calls through the candidate's own runtime-native boundary; writes out/<run_id>.json"
+      }
+    }
+  },
+  "route_steps": {
+    "contract": "G1-ROUTE-STEPS-1.0",
+    "rule": "Input: the PATH node sequence of G1-ROUTE-1.0, graph.json and the destination. Walk along the path edges (directed edge from->to) accumulating length for corridor, spur, outdoor and entrance edges. An entrance edge first adds its length, flushes the walk, then emits {kind: exit, building} (indoor -> outdoor, building of the indoor node) or {kind: enter, building} (outdoor -> indoor, building of the indoor node). A stairs or elevator edge flushes the walk and emits {kind: stairs|elevator, floor} with the floor of the next node. At the end the walk is flushed and {kind: arrive, code} is emitted with the destination code. Flushing emits {kind: walk, m} only when the accumulated length is above 0 mm; m = floor((mm + 500) / 1000). Summary {length_m, steps, floors}: length_m = floor((length_mm + 500) / 1000) of the whole route (every edge, stairs and lifts included), steps = number of steps including arrive, floors = floors of the path nodes in first-visit order without repeats (nodes without a floor skipped) joined by \"-\".",
+    "text": "route.step.walk {length}=m; route.step.stairs/elevator {floor}; route.step.exit/enter {building}; route.step.arrive {code}; route.summary {length}=length_m, {steps}, {floors}",
+    "reference": "synthetic-data/src/steps.mjs; oracle: synthetic-data/out/oracle/route_oracle.json results[].steps and results[].summary"
+  },
+  "ui_session_script": {
+    "id": "G1-UI-SCRIPT-1.0",
+    "cycle_s": 30,
+    "keyframes": [
+      {
+        "at_ms": 0,
+        "action": "camera",
+        "center_mm": [
+          72000,
+          33000
+        ],
+        "zoom": 17.0,
+        "duration_ms": 2000
+      },
+      {
+        "at_ms": 3000,
+        "action": "floor",
+        "floor": 2
+      },
+      {
+        "at_ms": 4000,
+        "action": "camera",
+        "center_mm": [
+          272000,
+          33000
+        ],
+        "zoom": 17.0,
+        "duration_ms": 4000
+      },
+      {
+        "at_ms": 9000,
+        "action": "camera",
+        "center_mm": [
+          272000,
+          33000
+        ],
+        "zoom": 18.5,
+        "duration_ms": 2000
+      },
+      {
+        "at_ms": 12000,
+        "action": "floor",
+        "floor": 3
+      },
+      {
+        "at_ms": 13000,
+        "action": "camera",
+        "center_mm": [
+          472000,
+          33000
+        ],
+        "zoom": 18.5,
+        "duration_ms": 5000
+      },
+      {
+        "at_ms": 19000,
+        "action": "camera",
+        "center_mm": [
+          472000,
+          33000
+        ],
+        "zoom": 16.5,
+        "duration_ms": 3000
+      },
+      {
+        "at_ms": 23000,
+        "action": "floor",
+        "floor": 1
+      },
+      {
+        "at_ms": 24000,
+        "action": "camera",
+        "center_mm": [
+          72000,
+          33000
+        ],
+        "zoom": 17.0,
+        "duration_ms": 5000
+      }
+    ],
+    "rule": "The script repeats every cycle_s from the window start for warmup_s + measure_s; camera moves use the binding's animated camera API with the given duration; rotation and tilt stay 0."
+  },
+  "map_policy": {
+    "rotate": "disabled",
+    "tilt": "disabled",
+    "attribution": "binding default, visible",
+    "logo": "binding default",
+    "initial_camera": "style center/zoom",
+    "floor_default": 1,
+    "label_language": "follows the app language (name_ar | name_en)"
+  },
+  "crash_fixtures": {
+    "CR1": "handled runtime exception thrown and caught in the runtime; recorded locally",
+    "CR2": "unhandled runtime exception on the UI path (runtime default handler)",
+    "CR3": "native crash in the common module (Android: SIGSEGV raised by the module; iOS: fatal trap in the module)",
+    "CR4": "main-thread hang of 10 s (ANR on Android)",
+    "CR5": "background termination by the harness while backgrounded (no app hook)",
+    "CR6": "runtime allocation until out-of-memory",
+    "CR7": "symbolication of the captured traces against the build's symbol artifacts (R8 mapping, Dart split debug info, Hermes source maps, dSYM)",
+    "CR8": "a synthetic canary is present in app state when CR1-CR4/CR6 fire; it must not appear in any captured trace"
+  },
+  "fuzz_targets": {
+    "FUZ01": "QR payload parser and validator (common module) through the runtime boundary",
+    "FUZ02": "bundle graph/destinations JSON parser of the candidate runtime (the same parser the app uses)",
+    "FUZ03": "bridge message decoder of the candidate runtime-native boundary (JSON envelope {method, args})"
+  },
+  "bridge_attack_cases": {
+    "BRG01": "malformed QR payloads into the native validator",
+    "BRG02": "malformed graph JSON into the runtime loader",
+    "BRG03": "unknown method name across the boundary",
+    "BRG04": "oversized field (> 2,953 bytes payload; > 64 KiB message)",
+    "BRG05": "wrong argument types",
+    "BRG06": "callback delivered after the receiving screen was destroyed",
+    "BRG07": "duplicate concurrent requests (same request id)",
+    "expected": "rejection with a predeclared code before any privileged effect; no crash, hang or state change"
+  },
+  "security": {
+    "permissions": {
+      "android": [
+        "android.permission.CAMERA (requested only on QR/AR entry)",
+        "android.permission.INTERNET (map binding and lab update only)"
+      ],
+      "ios": [
+        "NSCameraUsageDescription (requested only on QR/AR entry)"
+      ]
+    },
+    "no_permission_on_open": true,
+    "backup": "Android allowBackup=false with data extraction rules excluding everything; iOS bundle data marked excluded from backup",
+    "logging": "no user-entered text, query, route, payload or canary in any log, trace, marker or crash message; ids and codes only",
+    "network": "no network use except the lab update endpoint https://g1lab.test:8443 (lab CA trusted for that host only); cleartext disabled",
+    "secrets": "none; synthetic lab keys are public by design and only the public half is shipped"
+  },
+  "bench_protocols": {
+    "clock": "every timestamp below is nowNanos() of the common module, read by the runtime through its clock access (markers.clock.runtime_access)",
+    "search_route": {
+      "command": "bench.search-route",
+      "order": "500 queries of query_corpus.json in file order, then the 30 cases of route_cases.json in file order, one process, no restart",
+      "search_path": "the query text is placed in the search field state and the same submit handler as home.search.submit runs; compute_ns = duration of the G1-SEARCH-1.0 call alone; e2e_ns = submit handler entry -> first frame callback after the result state is applied (A: SchedulerBinding.addPostFrameCallback; B: requestAnimationFrame scheduled from a layout effect after commit; C Android: withFrameNanos after recomposition; C iOS: CADisplayLink after the SwiftUI update)",
+      "route_path": "origin, destination, step_free and the case blocked edges are set on the route screen state and the same handler as route.compute runs; compute_ns = G1-ROUTE-1.0 plus G1-ROUTE-STEPS-1.0; e2e_ns = handler entry -> first frame callback after the steps (or the rejection) are applied",
+      "result": "out/<run_id>.json {contract: \"G1-BENCH-SR-1.0\", run_id, kind, app, bundle_version, start_ns, end_ns, search: [{id, outcome, ids, compute_ns, e2e_ns}], route: [{id, outcome, nodes?, length_mm?, steps?, summary?, compute_ns, e2e_ns}]}; G1MARK run.start / run.done"
+    },
+    "bridge": {
+      "command": "bench.bridge",
+      "definition": "BRIDGE-WORKLOAD-v0.1 (campaign registration)",
+      "messages": 1000,
+      "rate_hz": 200,
+      "payload": "message i carries bytes [(i*64) mod (65536 - size + 1), +size) of the 64 KiB block = SHA-256(\"G1-SYNTH|2026091401|bridge-payload|<k>\") for k = 0..2047 concatenated (common payloadBlock(), fetched once before the series)",
+      "schedule": "open loop: message i is due at t0 + round(i * 1e9 / rate_hz) ns; a late message is sent late and recorded, never skipped or coalesced",
+      "r2n_measured": "t_send = nowNanos() on the runtime thread, then the payload crosses the candidate boundary to the common echo (async: echoAsync with the reply delivered back to the runtime thread; sync: echoSync on the runtime thread); the common module records t_entry at the start of the echo; latency = t_entry - t_send; the reply (length << 32 | crc) is checked against the runtime CRC-32 of the payload",
+      "r2n_control": "t_send = nowNanos(), then a runtime-local echo (t_entry = nowNanos() at its start, copy into a preallocated runtime buffer, CRC-32 written in the runtime language) is called directly on the runtime thread; latency = t_entry - t_send",
+      "n2r_measured": "the native worker emits message i at its due time with t_sent = nowNanos(); the runtime handler reads t_recv = nowNanos() first on the runtime thread, then checks the CRC-32 of the payload; latency = t_recv - t_sent",
+      "n2r_control": "a runtime-side timer emits message i at its due time with t_sent = nowNanos() and calls the same handler directly; latency = t_recv - t_sent",
+      "runtime_thread": {
+        "A": "Dart root isolate",
+        "B": "JavaScript thread",
+        "C": "main (UI) thread"
+      },
+      "boundary": {
+        "A": "MethodChannel g1/native (Uint8List payload) for R2N; EventChannel g1/n2r for N2R; no synchronous path (R2N.64B.sync -> UNSUPPORTED)",
+        "B": "TurboModule NativeG1: payload as a base64 string (no binary type at this boundary); synchronous JSI method for R2N.64B.sync; codegen event emitter for N2R",
+        "C": "direct call into the common module (Kotlin/Swift), including the hop to the native worker and back to the main thread"
+      },
+      "order": "control-first: null-control series then measured series; measured-first: the reverse (the harness alternates by run number)",
+      "completion": "a series completes when every reply/message has arrived, or fails after 10 s without progress (outcome FAILED with the completed count)",
+      "result": "out/<run_id>.json {contract: \"G1-BENCH-BRIDGE-1.0\", run_id, app, workload, order, messages, rate_hz, outcome OK|UNSUPPORTED|FAILED, series: [{kind: control|measured, t0_ns, send_offsets_ns: [...], latencies_ns: [...], completed, crc_failures}]}; G1MARK run.start / run.done"
+    }
+  },
+  "data_contract_text": {
+    "G1-SEARCH-1.0": "normalize(s): NFKC; Eastern-Arabic (U+0660-0669) and Persian (U+06F0-06F9) digits -> ASCII; remove tatweel (U+0640), Arabic marks U+064B-U+065F and U+0670, and the format characters U+061C, U+200B-U+200F, U+202A-U+202E, U+2060-U+2069, U+FEFF; ASCII A-Z -> a-z only (no other case mapping; O/0 and I/1 never substituted). tokens(s): normalize(s) split at runs of whitespace (U+0009-000D, U+0020, U+0085, U+00A0, U+1680, U+2000-200A, U+2028, U+2029, U+202F, U+205F, U+3000) and hyphen-like separators (U+002D, U+2010-U+2015, U+2212); empty tokens dropped. codeKey(s): concatenation of tokens(s) with a-z upper-cased. search(q): no tokens -> NO_MATCH. If codeKey(q) matches ^SB[0-9]+F[0-9]+R[0-9]+$ the result is the destination whose codeKey(code) equals it (UNIQUE_MATCH) or NO_MATCH (no token fallback). Otherwise a destination matches when every query token equals one of its tokens: tokens(name_en), tokens(name_ar), \"sb<b>\" (lower-cased building), \"f<floor>\", \"r<room_number>\", \"<room_number>\" and the lower-cased codeKey(code). 0 matches -> NO_MATCH, 1 -> UNIQUE_MATCH, more -> AMBIGUOUS; ids in ascending code-unit order; no ranking. Reference: synthetic-data/src/search.mjs; oracle: synthetic-data/out/oracle/search_oracle.json over the bundle query_corpus.json.",
+    "G1-ROUTE-1.0": "Graph: graph.json directed edges (each undirected edge \"E####\" appears as from->to and to->from). route(origin node, destination node = destinations[id].node, step_free, blocked undirected edge ids): blocked edges removed; step_free removes edges with step_free = false (stairs); Dijkstra on integer length_mm. Reachable -> PATH {nodes, length_mm}. Otherwise REJECT_STEP_FREE_UNAVAILABLE if step_free was requested and the destination is reachable without that constraint (same blocked set); else REJECT_BLOCKED if edges were blocked and the destination is reachable without the blocked set (same step_free flag); else REJECT_UNREACHABLE. Ties: prev(v) = the smallest node id u (code-unit order) with dist(u) + len(u, v) = dist(v); the path is read back from the destination through prev. Origin equal to the destination node: PATH with one node and length 0. Reference: synthetic-data/src/routes.mjs; oracle: synthetic-data/out/oracle/route_oracle.json over the bundle route_cases.json (unique shortest paths).",
+    "G1-STYLE-1.0": "style.json of the active verified bundle: every \"g1bundle://\" prefix is replaced by the file URL of the bundle directory (ending with \"/\"); for every layer in metadata.runtime_floor_layers the floor comparison [\"==\", [\"get\", \"floor\"], 1] is replaced by the selected floor; for every layer in metadata.runtime_language_layers the text-field becomes [\"get\", \"name_ar\"] or [\"get\", \"name_en\"] with the app language; the \"route\" source receives a FeatureCollection with copies of the geometry.geojson LineString features of the path edges (undirected ids; stairs and lift edges have no geometry and are skipped) with their properties, or an empty collection. map_policy applies (rotation and tilt disabled)."
+  }
+}

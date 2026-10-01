@@ -97,3 +97,21 @@ test('document JSON is line-oriented with a final newline', () => {
   const b = documentJson({ a: 1, list: [{ x: 1 }, { x: 2 }] }).toString('utf8');
   assert.equal(b, '{\n"a":1,\n"list":[\n{"x":1},\n{"x":2}\n]\n}\n');
 });
+
+test('route step contract G1-ROUTE-STEPS-1.0 on a hand-made path', async () => {
+  const { stepIndex, routeSteps, metres } = await import('../src/steps.mjs');
+  const nodes = [
+    { id: 'N1', building: 'SB1', floor: 2 }, { id: 'N2', building: 'SB1', floor: 1 }, { id: 'N3', building: 'SB1', floor: 1 },
+    { id: 'N4' }, { id: 'N5', building: 'SB2', floor: 1 }, { id: 'N6', building: 'SB2', floor: 3 }, { id: 'N7', building: 'SB2', floor: 3 },
+  ];
+  const e = (from, to, kind, length_mm) => ({ from, to, kind, length_mm });
+  const edges = [e('N1', 'N2', 'stairs', 10500), e('N2', 'N3', 'corridor', 1499), e('N3', 'N4', 'entrance', 30000),
+    e('N4', 'N5', 'entrance', 20001), e('N5', 'N6', 'elevator', 30000), e('N6', 'N7', 'spur', 499)];
+  const r = routeSteps(stepIndex({ nodes, edges }), ['N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7'], { code: 'SB2-F3-R001' });
+  assert.deepEqual(r.steps, [
+    { kind: 'stairs', floor: 1 }, { kind: 'walk', m: 31 }, { kind: 'exit', building: 'SB1' }, { kind: 'walk', m: 20 },
+    { kind: 'enter', building: 'SB2' }, { kind: 'elevator', floor: 3 }, { kind: 'walk', m: 0 }, { kind: 'arrive', code: 'SB2-F3-R001' }]);
+  assert.deepEqual(r.summary, { length_m: metres(92499), steps: 8, floors: '2-1-3' });
+  assert.equal(metres(499), 0);
+  assert.equal(metres(500), 1);
+});

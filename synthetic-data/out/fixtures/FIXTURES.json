@@ -1,0 +1,21 @@
+{
+"label":"NON-PRODUCTION / SYNTHETIC DATA ONLY / NOT A REAL INSTITUTION / NOT FOR NAVIGATION",
+"trust_contract":"G1-TRUST-1.0",
+"active_bundle":"G1SYN-1.0.0",
+"w_start":"2026-10-01T00:00:00Z",
+"w_end":"2027-10-01T00:00:00Z",
+"fixtures":[
+{"id":"F-EXPIRED","file":"fixtures/F-EXPIRED.zip","expected":"REJECT_EXPIRED","note":"validity W_start-90d .. W_start-1s, validly signed"},
+{"id":"F-NOT-YET-VALID","file":"fixtures/F-NOT-YET-VALID.zip","expected":"REJECT_NOT_YET_VALID","note":"validity W_end+1d .. W_end+90d, validly signed"},
+{"id":"F-TAMPERED","file":"fixtures/F-TAMPERED.zip","expected":"REJECT_HASH_MISMATCH","note":"graph.json byte 286164 XOR 0x01 after signing (valid manifest and signature)"},
+{"id":"F-WRONG-SCHEMA","file":"fixtures/F-WRONG-SCHEMA.zip","expected":"REJECT_SCHEMA","note":"MANIFEST schema_version 99, validly signed"},
+{"id":"F-MIXED","file":"fixtures/F-MIXED.zip","expected":"REJECT_HASH_MISMATCH","note":"MANIFEST lists the graph.json hash of G1SYN-0.9.0 while the files are G1SYN-1.0.0, validly signed"},
+{"id":"F-REVOKED","file":"fixtures/F-REVOKED.zip","expected":"REJECT_REVOKED_KEY","note":"valid content signed with lab key 2 (revoked)"},
+{"id":"F-EXPIRED-KEY","file":"fixtures/F-EXPIRED-KEY.zip","expected":"REJECT_EXPIRED_KEY","note":"valid content signed with lab key 3 (trusted only until W_start-1s)"},
+{"id":"F-UNKNOWN-KEY","file":"fixtures/F-UNKNOWN-KEY.zip","expected":"REJECT_UNKNOWN_KEY","note":"valid content signed with lab key 4 (absent from the trust store)"},
+{"id":"F-WRONG-VERSION","file":"fixtures/F-WRONG-VERSION.zip","expected":"REJECT_UNSUPPORTED_VERSION","note":"validly signed bundle_version G1SYN-2.0.0 (unsupported major version)"},
+{"id":"F-DOWNGRADE","file":"fixtures/F-DOWNGRADE.zip","expected":"REJECT_DOWNGRADE","note":"validly signed G1SYN-0.9.0 offered while G1SYN-1.0.0 is active"},
+{"id":"U-G1SYN-1.0.1","file":"fixtures/U-G1SYN-1.0.1.zip","expected":"ACTIVATED","note":"valid newer bundle (update, rollback and interrupted-activation cases); activates over G1SYN-1.0.0, which becomes the previous bundle"},
+{"id":"F-CLOCK","file":null,"expected":{"a":"REJECT_UNTRUSTED_TIME","b":"REJECT_NOT_YET_VALID"},"note":"(a) after activating G1SYN-1.0.0 and rejecting F-EXPIRED at real time, the device clock is set to W_start-30d; F-EXPIRED must stay rejected and the backward jump is untrusted time (no validity-dependent authoritative guidance); (b) at real time F-NOT-YET-VALID is rejected"}
+]
+}

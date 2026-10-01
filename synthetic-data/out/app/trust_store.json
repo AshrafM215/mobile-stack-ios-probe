@@ -1,0 +1,34 @@
+{
+  "label": "NON-PRODUCTION / SYNTHETIC LAB TRUST STORE / NOT FOR PRODUCTION USE",
+  "trust_contract": "G1-TRUST-1.0",
+  "algorithm": "Ed25519",
+  "keys": [
+    {
+      "key_id": "be35a22aa8a14f58",
+      "public_key": "QOmgjDFZx6Y3tfK1IuVtl0RDnC7sdGbcaIFg3mrxfYs",
+      "status": "trusted",
+      "valid_until": null,
+      "lab_key": 1
+    },
+    {
+      "key_id": "45e311f90b65db9f",
+      "public_key": "dPJDu9QJ529ELHTjF-eIqxJ59-uMxMX77tJij0QBNBU",
+      "status": "revoked",
+      "valid_until": null,
+      "lab_key": 2
+    },
+    {
+      "key_id": "c748df305d03069a",
+      "public_key": "1DdtKBqebcntyA7QxQsrJmY76E3OmGAlI6mpva1_ILI",
+      "status": "trusted",
+      "valid_until": "2026-09-30T23:59:59Z",
+      "lab_key": 3
+    }
+  ],
+  "absent_lab_keys": [
+    {
+      "lab_key": 4,
+      "key_id": "1ecfb65e1a7e78f2"
+    }
+  ]
+}

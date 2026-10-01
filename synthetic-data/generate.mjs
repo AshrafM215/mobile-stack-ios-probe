@@ -1,4 +1,4 @@
-// G1 synthetic data generator g1-synth-gen 1.0.0 - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+// G1 synthetic data generator g1-synth-gen 1.1.0 - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Implements G1-SYNTH-SPEC-0.3. Usage:
 //   node generate.mjs --out <new-dir> --fonts <cache-dir> --w-start <YYYY-MM-DDT00:00:00Z>
 // The output directory must not exist. Generation uses no network, no clock and no randomness outside the DRBG.
@@ -13,6 +13,7 @@ import { buildDestinations, destinationRecord, NAME_WORDS_VERSION } from './src/
 import { buildQueries, MIX as QUERY_MIX } from './src/queries.mjs';
 import { buildIndex, search, SEARCH_CONTRACT } from './src/search.mjs';
 import { buildRouteCases, MIX as ROUTE_MIX, ROUTE_CONTRACT } from './src/routes.mjs';
+import { stepIndex, routeSteps, STEPS_CONTRACT } from './src/steps.mjs';
 import { anchors, qrFixtures, renderQr, QR_CONTRACT } from './src/qr.mjs';
 import { buildSchedule } from './src/schedule.mjs';
 import { labKey, trustStore } from './src/trust.mjs';
@@ -21,7 +22,7 @@ import { bundleFiles, manifestFor, signatureFor, zipBundle, trustFixtures, SPEC,
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const GENERATOR = { name: 'g1-synth-gen', version: '1.0.0' };
+const GENERATOR = { name: 'g1-synth-gen', version: '1.1.0' };
 
 function args() {
   const a = process.argv.slice(2);
@@ -89,6 +90,11 @@ export async function generate({ out, fonts, wStart }) {
 
   // bundle 1.0.0 and fixtures
   const files100 = withLicenses(bundleFiles(ctx, 'G1SYN-1.0.0'));
+  const published = stepIndex(JSON.parse(files100['graph.json'].toString('utf8')));
+  const publishedDests = new Map(JSON.parse(files100['destinations.json'].toString('utf8')).destinations.map((d) => [d.id, d]));
+  for (const [i, c] of cases.entries()) {
+    if (routeOracle[i].outcome === 'PATH') Object.assign(routeOracle[i], routeSteps(published, routeOracle[i].nodes, publishedDests.get(c.destination)));
+  }
   const manifest = manifestFor(files100, 'G1SYN-1.0.0', wStart, wEnd);
   const signature = signatureFor(keys[1], manifest);
   const bundleZip = zipBundle(files100, manifest, signature);
@@ -115,7 +121,7 @@ export async function generate({ out, fonts, wStart }) {
   outputs['fixtures/FIXTURES.json'] = documentJson({ label: LABEL, trust_contract: TRUST_CONTRACT, active_bundle: 'G1SYN-1.0.0', w_start: wStart, w_end: wEnd, fixtures: fixtures.index });
   outputs['oracle/search_oracle.json'] = documentJson({ label: LABEL, search_contract: SEARCH_CONTRACT, bundle_version: 'G1SYN-1.0.0', mix: QUERY_MIX, results: searchOracle });
   outputs['oracle/query_categories.json'] = documentJson({ label: LABEL, queries: queries.map((q) => ({ id: q.id, category: q.category, form: q.form })) });
-  outputs['oracle/route_oracle.json'] = documentJson({ label: LABEL, route_contract: ROUTE_CONTRACT, bundle_version: 'G1SYN-1.0.0', mix: ROUTE_MIX, results: routeOracle });
+  outputs['oracle/route_oracle.json'] = documentJson({ label: LABEL, route_contract: ROUTE_CONTRACT, steps_contract: STEPS_CONTRACT, bundle_version: 'G1SYN-1.0.0', mix: ROUTE_MIX, results: routeOracle });
   outputs['oracle/qr_fixtures.json'] = documentJson({ label: LABEL, qr_contract: QR_CONTRACT, bundle_version: 'G1SYN-1.0.0', rule: 'A QR identity never establishes pose, floor or arrival.', fixtures: qrfx });
   outputs['app/trust_store.json'] = prettyJson(trustStore(keys, wStart));
 
@@ -125,7 +131,7 @@ export async function generate({ out, fonts, wStart }) {
     runtime: { node: process.versions.node, platform: process.platform, arch: process.arch },
     tools: { qrcode: qrPkg.version, fontnik: fontnikPkg.version, fontnik_binary: `prebuilds/${process.platform}-${process.arch}/fontnik.node`, fontnik_binary_sha256: sha256(readFileSync(fontnikBinary)) },
     inputs: { seed: SEED, w_start: wStart, w_end: wEnd, names: NAME_WORDS_VERSION, fonts: fontSpec.fonts.map((f) => ({ file: f.file, sha256: f.sha256, version: f.version })), fontstack: FONTSTACK, glyph_ranges: GLYPH_RANGES },
-    contracts: { search: SEARCH_CONTRACT, route: ROUTE_CONTRACT, qr: QR_CONTRACT, style: STYLE_CONTRACT, trust: TRUST_CONTRACT },
+    contracts: { search: SEARCH_CONTRACT, route: ROUTE_CONTRACT, route_steps: STEPS_CONTRACT, qr: QR_CONTRACT, style: STYLE_CONTRACT, trust: TRUST_CONTRACT },
     counts: { nodes: nodes.length, undirected_edges: edges.length, directed_edges: edges.length * 2, destinations: dests.length, queries: queries.length, routes: cases.length, anchors: anchorList.length, qr_fixtures: qrfx.length, schedule: schedule.length, trust_fixtures: fixtures.index.length },
     bundle: { version: 'G1SYN-1.0.0', file: 'bundle/G1SYN-1.0.0.zip', bundle_sha256: sha256(manifest), zip_sha256: sha256(bundleZip), files: JSON.parse(manifest.toString('utf8')).files.length },
     oracle_sha256: sha256(Buffer.from(oracleFiles.map((p) => `${p}\t${sha256(outputs[p])}\n`).join(''), 'utf8')),

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "label": "NON-PRODUCTION / SYNTHETIC DATA ONLY / NOT A REAL INSTITUTION / NOT FOR NAVIGATION",
+  "bundle_version": "G1SYN-1.0.0",
+  "spec": "G1-SYNTH-SPEC-0.3",
+  "trust_contract": "G1-TRUST-1.0",
+  "valid_from": "2026-10-01T00:00:00Z",
+  "valid_until": "2027-10-01T00:00:00Z",
+  "contracts": {
+    "search": "G1-SEARCH-1.0",
+    "route": "G1-ROUTE-1.0",
+    "qr": "G1-QR-1.0",
+    "style": "G1-STYLE-1.0"
+  },
+  "files": [
+    {
+      "path": "destinations.json",
+      "bytes": 86785,
+      "sha256": "0aaccfb8a6b0989e6b5e18f129ca39d9be21f00f3dba69dfc4f325a9f2906447"
+    },
+    {
+      "path": "geometry.geojson",
+      "bytes": 657407,
+      "sha256": "7861970f9500f7c3380f7e3c789bc074f010901498326064c6ebeab62da4cc8e"
+    },
+    {
+      "path": "glyphs/G1Sans/0-255.pbf",
+      "bytes": 76047,
+      "sha256": "e1cbf1dea1806bb2767b36f01fef60bffa0edbd168a9ab63178da323980d848d"
+    },
+    {
+      "path": "glyphs/G1Sans/1536-1791.pbf",
+      "bytes": 111814,
+      "sha256": "395ae845d80f27d8d16e300987603968ea7ce2bb570757c3b2df1f7c16e7efdb"
+    },
+    {
+      "path": "glyphs/G1Sans/64256-64511.pbf",
+      "bytes": 81808,
+      "sha256": "271a0698df3643ba2f7549cb9ac5d0060bcc98cb6a550234d14437c64fedec4f"
+    },
+    {
+      "path": "glyphs/G1Sans/64512-64767.pbf",
+      "bytes": 200686,
+      "sha256": "2c6acf3a4ce77592ae65368b171cc9216658b67a15842db980853c0db6f243dd"
+    },
+    {
+      "path": "glyphs/G1Sans/64768-65023.pbf",
+      "bytes": 259237,
+      "sha256": "561b6400f31ecc156889d9ddfcc14d82282c8b520b84a113b65a0a3460c68fbd"
+    },
+    {
+      "path": "glyphs/G1Sans/65024-65279.pbf",
+      "bytes": 66457,
+      "sha256": "5ccd50aacce867de9280baf3c690e7d9bd9a5e92d186dbe7954e6229edc01196"
+    },
+    {
+      "path": "glyphs/G1Sans/8192-8447.pbf",
+      "bytes": 52019,
+      "sha256": "328ff74ec6a7cbbf32cfd185b6e98e1c0b09c851f3d3105161a45b31f2a00957"
+    },
+    {
+      "path": "graph.json",
+      "bytes": 939130,
+      "sha256": "70f69b931cb84ef86a858f32eee6757c873ad1c4ad5c86a97b13fc8711593910"
+    },
+    {
+      "path": "licenses/NotoSans-OFL.txt",
+      "bytes": 4396,
+      "sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
+    },
+    {
+      "path": "licenses/NotoSansArabic-OFL.txt",
+      "bytes": 4382,
+      "sha256": "07fc70bfeb985cc1a87a8587d0a0c80bab11c86c9dc3fd95b6f0cb332f983e96"
+    },
+    {
+      "path": "qr_identities.json",
+      "bytes": 1550,
+      "sha256": "d63dc77abbecf6f406acdf0b40e55e1000c356d0fa008bf0153018e51f1b8627"
+    },
+    {
+      "path": "query_corpus.json",
+      "bytes": 21096,
+      "sha256": "617b2151c50a751ddc0f5ee2a42a8deb86f1ae4cf1ac3c8dce40f1fc9ad14988"
+    },
+    {
+      "path": "route_cases.json",
+      "bytes": 2758,
+      "sha256": "e6b60cf0fbb0239454e30c47a8728cfd045b2bba6ffc53ee35e38f6eab22aec7"
+    },
+    {
+      "path": "schedule.json",
+      "bytes": 12834,
+      "sha256": "17006ee5a6d94e0cd98cf5f4536bc51e71793f6d970194c8b70161caea2ded4c"
+    },
+    {
+      "path": "search_index_input.json",
+      "bytes": 46748,
+      "sha256": "45f0e67969ec3497fa1517546decb803e7312385b1409573c9580f5339e427de"
+    },
+    {
+      "path": "sprites/sprite.json",
+      "bytes": 304,
+      "sha256": "7b4c252bc39ab589a621db6824ab3df228219f4e04769a58c461079a72de5d85"
+    },
+    {
+      "path": "sprites/sprite.png",
+      "bytes": 7106,
+      "sha256": "d24db1ea396a4f3487bc4b899ce6a62da596e679b4a33845f860a5dc28ef0afc"
+    },
+    {
+      "path": "sprites/sprite@2x.json",
+      "bytes": 304,
+      "sha256": "a9c614e94baf64757b6c32ba5381fd8b9f56da19b6aaa881cc75326e63a4477a"
+    },
+    {
+      "path": "sprites/sprite@2x.png",
+      "bytes": 27866,
+      "sha256": "fdd5441f8a41bd58a0db86aff18ba634b3417be5106ec49bfc0fc7316ca193b4"
+    },
+    {
+      "path": "style.json",
+      "bytes": 5800,
+      "sha256": "c4609e8a7c674c1494a96b989fe8cf166d58062de4269553cd05b887c8acf109"
+    }
+  ]
+}

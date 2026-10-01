@@ -96,6 +96,8 @@ export function trustFixtures(ctx, keys, valid, wStartIso, wEndIso) {
   const f200 = withLic(bundleFiles(ctx, 'G1SYN-2.0.0'));
   add('F-WRONG-VERSION', f200, manifestFor(f200, 'G1SYN-2.0.0', wStartIso, wEndIso), keys[1], 'REJECT_UNSUPPORTED_VERSION', 'validly signed bundle_version G1SYN-2.0.0 (unsupported major version)');
   add('F-DOWNGRADE', f090, manifestFor(f090, 'G1SYN-0.9.0', wStartIso, wEndIso), keys[1], 'REJECT_DOWNGRADE', 'validly signed G1SYN-0.9.0 offered while G1SYN-1.0.0 is active');
+  const f101 = withLic(bundleFiles(ctx, 'G1SYN-1.0.1'));
+  add('U-G1SYN-1.0.1', f101, manifestFor(f101, 'G1SYN-1.0.1', wStartIso, wEndIso), keys[1], 'ACTIVATED', 'valid newer bundle (update, rollback and interrupted-activation cases); activates over G1SYN-1.0.0, which becomes the previous bundle');
   index.push({ id: 'F-CLOCK', file: null, expected: { a: 'REJECT_UNTRUSTED_TIME', b: 'REJECT_NOT_YET_VALID' },
     note: '(a) after activating G1SYN-1.0.0 and rejecting F-EXPIRED at real time, the device clock is set to W_start-30d; F-EXPIRED must stay rejected and the backward jump is untrusted time (no validity-dependent authoritative guidance); (b) at real time F-NOT-YET-VALID is rejected' });
   return { files: out, index };
