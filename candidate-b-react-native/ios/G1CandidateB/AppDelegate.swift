@@ -1,3 +1,4 @@
+// G1 candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 import UIKit
 import React
 import React_RCTAppDelegate
@@ -14,8 +15,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    // G1 candidate B - NON-PRODUCTION / SYNTHETIC DATA ONLY: native launch marker for feasibility evidence.
-    NSLog("G1_PROBE app=candidate-b-react-native platform=ios event=launch")
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -31,6 +30,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       launchOptions: launchOptions
     )
 
+    return true
+  }
+
+  /// Lab hook transport for a running app (G1-CIC-1.0): g1bench-b://cmd?name=<cmd>&args=<json>. The TurboModule observes
+  /// the notification, parses and validates the command in the common module and emits it to JavaScript.
+  func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    guard url.scheme == "g1bench-b" else { return false }
+    NotificationCenter.default.post(name: Notification.Name("G1LabCommandURL"), object: url)
     return true
   }
 }

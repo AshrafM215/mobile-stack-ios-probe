@@ -89,14 +89,18 @@ public final class ArViewController: UIViewController, ARSessionDelegate {
         arrow.isHidden = true
         arrow.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(arrow)
-        let close = UIButton(type: .system)
+        var config = UIButton.Configuration.filled()
+        config.title = text("close", "Close AR")
+        config.baseBackgroundColor = UIColor(white: 1, alpha: 0.9)
+        config.baseForegroundColor = .black
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+            var a = attrs
+            a.font = UIFont.preferredFont(forTextStyle: .headline)
+            return a
+        }
+        let close = UIButton(configuration: config)
         close.accessibilityIdentifier = "ar.close"
-        close.setTitle(text("close", "Close AR"), for: .normal)
-        close.titleLabel?.font = .preferredFont(forTextStyle: .headline)
-        close.titleLabel?.adjustsFontForContentSizeCategory = true
-        close.backgroundColor = UIColor(white: 1, alpha: 0.9)
-        close.layer.cornerRadius = 8
-        close.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
         close.addTarget(self, action: #selector(onClose), for: .touchUpInside)
         close.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(close)

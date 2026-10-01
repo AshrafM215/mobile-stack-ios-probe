@@ -9,7 +9,8 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
-platform :ios, min_ios_version_supported
+# iOS 16.0: the platform floor of all three candidates (contract platform_floor).
+platform :ios, '16.0'
 prepare_react_native_project!
 
 linkage = ENV['USE_FRAMEWORKS']
@@ -26,6 +27,9 @@ target 'G1CandidateB' do
     # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
+
+  # G1 common native module (Swift; shared with candidates A and C), used by the g1-native TurboModule adapter.
+  pod 'G1NativeCommon', :path => '../../native-common/ios'
 
   post_install do |installer|
     react_native_post_install(

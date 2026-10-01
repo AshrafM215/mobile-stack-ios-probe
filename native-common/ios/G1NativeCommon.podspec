@@ -7,10 +7,12 @@ Pod::Spec.new do |s|
   s.homepage     = "https://example.invalid/g1-native-common"
   s.license      = { :type => "Proprietary-Synthetic", :text => "NON-PRODUCTION / SYNTHETIC DATA ONLY" }
   s.author       = { "G1 lab" => "lab@example.invalid" }
-  s.source       = { :path => "." }
+  s.source       = { :git => "https://example.invalid/g1-native-common.git", :tag => s.version.to_s }
   s.platforms    = { :ios => "16.0" }
   s.swift_version = "5.9"
   s.source_files = "Sources/G1NativeCommon/**/*.swift"
   s.resource_bundles = { "G1NativeCommonResources" => ["Sources/G1NativeCommon/Resources/g1/*"] }
-  s.frameworks   = "ARKit", "AVFoundation", "CryptoKit", "Vision", "SceneKit", "Security", "UIKit"
+  s.frameworks   = "ARKit", "AVFoundation", "CoreImage", "CryptoKit", "ImageIO", "SceneKit", "Security", "UIKit"
+  # Objective-C(++) consumers (candidate B) import the generated G1NativeCommon-Swift.h
+  s.pod_target_xcconfig = { "DEFINES_MODULE" => "YES" }
 end

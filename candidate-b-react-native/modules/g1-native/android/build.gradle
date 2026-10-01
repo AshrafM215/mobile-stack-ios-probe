@@ -1,0 +1,27 @@
+// Candidate B adapter (TurboModule NativeG1) to the G1 common native module - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+apply plugin: "com.android.library"
+apply plugin: "com.facebook.react"
+
+android {
+    namespace "com.example.g1bench.g1native"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+react {
+    jsRootDir = file("../src/")
+    libraryName = "G1NativeSpec"
+    codegenJavaPackageName = "com.example.g1bench.g1native"
+}
+
+dependencies {
+    implementation "com.facebook.react:react-android"
+    // the common module is included by the app's settings.gradle as ":g1-native-common"
+    implementation project(":g1-native-common")
+}

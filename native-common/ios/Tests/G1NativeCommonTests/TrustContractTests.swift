@@ -61,17 +61,17 @@ final class TrustContractTests: XCTestCase {
         let ok = try StoredZip.read(Self.zip("dir/ok.txt", Data("hello".utf8), method: 0))
         XCTAssertEqual(String(decoding: ok["dir/ok.txt"]!, as: UTF8.self), "hello")
         // invalid UTF-8 in a name is a malformed container
-        assertMalformed(Self.zip(Data([0x61, 0xFF, 0x62]), Data("x".utf8), method: 0))
+        assertMalformed(Self.zipRawName(Data([0x61, 0xFF, 0x62]), Data("x".utf8), method: 0))
     }
 
     private func assertMalformed(_ zip: Data, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertThrowsError(try StoredZip.read(zip), file: file, line: line)
     }
 
-    static func zip(_ name: String, _ data: Data, method: Int) -> Data { zip(Data(name.utf8), data, method: method) }
+    static func zip(_ name: String, _ data: Data, method: Int) -> Data { zipRawName(Data(name.utf8), data, method: method) }
 
     /// One-entry ZIP; method 8 is declared to prove that compressed entries are refused.
-    static func zip(_ n: Data, _ data: Data, method: Int) -> Data {
+    static func zipRawName(_ n: Data, _ data: Data, method: Int) -> Data {
         let crc = Int(Crc32.checksum(data))
         var b = Data()
         func le16(_ v: Int) { b.append(UInt8(v & 0xFF)); b.append(UInt8((v >> 8) & 0xFF)) }

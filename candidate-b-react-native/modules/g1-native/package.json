@@ -2,13 +2,14 @@
   "name": "g1-native",
   "version": "0.1.0",
   "private": true,
-  "description": "G1 synthetic native bridge for candidate B - NON-PRODUCTION / SYNTHETIC DATA ONLY.",
+  "description": "G1 common native module adapter for candidate B (TurboModule NativeG1) - NON-PRODUCTION / SYNTHETIC DATA ONLY.",
   "main": "src/index.ts",
   "react-native": "src/index.ts",
   "source": "src/index.ts",
   "files": [
     "src",
     "ios",
+    "android",
     "G1Native.podspec"
   ],
   "peerDependencies": {
@@ -23,7 +24,7 @@
     },
     "ios": {
       "modulesProvider": {
-        "NativeG1Ar": "RCTNativeG1Ar"
+        "NativeG1": "RCTNativeG1"
       }
     }
   }

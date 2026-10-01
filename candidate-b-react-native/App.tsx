@@ -1,53 +1,57 @@
 // G1 candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
-import React, { useState } from 'react';
-import { Button, StyleSheet, Text, View } from 'react-native';
-import { Camera, Map } from '@maplibre/maplibre-react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { isArSupported } from 'g1-native';
-import { describeAr, mark } from './src/probe';
-import syntheticStyle from './probe-style-v0.json';
+// Synthetic wayfinding benchmark app (G1-CIC-1.0). Not a product; synthetic data only; not for navigation.
+import React, { useEffect, useLayoutEffect, useSyncExternalStore } from 'react';
+import { AppState as PlatformAppState, BackHandler, StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { Strings } from './src/core/strings';
+import { LabController } from './src/lab';
+import { AppState } from './src/state';
+import { Root } from './src/ui/screens';
+import ar from './src/strings/ar.json';
+import en from './src/strings/en.json';
+
+const state = new AppState({ ar: new Strings('ar', ar as Record<string, string>), en: new Strings('en', en as Record<string, string>) });
+
+let started = false;
+function start(): void {
+  if (started) return;
+  started = true;
+  void state.boot().then(() => new LabController(state).start());
+}
 
 function App(): React.JSX.Element {
-  const [mapStatus, setMapStatus] = useState('loading');
-  const [arStatus, setArStatus] = useState('not checked');
+  useSyncExternalStore(state.subscribe, state.getSnapshot);
 
-  const checkAr = () => {
-    const supported = isArSupported();
-    mark('ar_check', `supported=${supported}`);
-    setArStatus(describeAr(supported));
-  };
+  // every commit of the tree: resolves the frame waiters of the bench loops (requestAnimationFrame after commit)
+  useLayoutEffect(() => state.onCommit());
+
+  useEffect(() => {
+    start();
+    let previous = PlatformAppState.currentState;
+    const lifecycle = PlatformAppState.addEventListener('change', (next) => {
+      if (next === 'active' && previous !== 'active') state.onResumed();
+      previous = next;
+    });
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (state.stack.length > 1) {
+        state.back();
+        return true;
+      }
+      return false;
+    });
+    return () => {
+      lifecycle.remove();
+      back.remove();
+    };
+  }, []);
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <Text testID="title" style={styles.title}>
-          G1 Candidate B - synthetic probe
-        </Text>
-        <View style={styles.map} accessible accessibilityLabel="Synthetic map">
-          <Map
-            style={styles.fill}
-            mapStyle={syntheticStyle as object}
-            onDidFinishLoadingStyle={() => {
-              mark('style_loaded');
-              setMapStatus('style loaded');
-            }}
-          >
-            <Camera initialViewState={{ center: [0.0007, 0.0003], zoom: 16 }} />
-          </Map>
-        </View>
-        <Text testID="mapStatus">Map: {mapStatus}</Text>
-        <Button testID="checkAR" title="Check AR" onPress={checkAr} />
-        <Text testID="arStatus">AR: {arStatus}</Text>
-      </SafeAreaView>
+      <StatusBar barStyle="dark-content" />
+      <Root state={state} />
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  title: { fontSize: 17, fontWeight: '600', marginBottom: 12 },
-  map: { height: 320, marginBottom: 12 },
-  fill: { flex: 1 },
-});
 
 export default App;
