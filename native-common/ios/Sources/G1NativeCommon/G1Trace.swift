@@ -70,7 +70,7 @@ public enum G1Trace {
         lock.unlock()
         let text = line(name, runtimeNanos: runtimeNanos, fields, seq: n, t: nowNanos())
         #if canImport(os)
-        logger.info("\(text, privacy: .public)")
+        logger.notice("\(text, privacy: .public)") // default level: persisted, visible to `log show` without flags
         #else
         FileHandle.standardError.write(Data((text + "\n").utf8))
         #endif

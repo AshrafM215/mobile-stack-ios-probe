@@ -280,7 +280,7 @@
     },
     "sink": {
       "android": "logcat tag G1MARK, priority INFO",
-      "ios": "unified log subsystem com.example.g1bench, category G1MARK (public)"
+      "ios": "unified log subsystem com.example.g1bench, category G1MARK, level notice (the default level: persisted, read by log show without flags), public"
     },
     "names": [
       "app.start",
