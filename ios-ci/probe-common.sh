@@ -121,6 +121,10 @@ fetch_xcodegen() {
 run_e2e() {
   local udid="$1" bundle="$2" scheme="$3" candidate="$4" data stream_pid rc=0
   fetch_xcodegen
+  # The READY instance (launched with captured output) is ended first: every test then launches a fresh process instead
+  # of terminating a running one (the first test's launch, which had to terminate it, timed out once in a probe round).
+  xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1 || true
+  sleep 2
   data=$(xcrun simctl get_app_container "$udid" "$bundle" data)
   mkdir -p "$data/Documents/g1/import"
   cp "$PROBE_ROOT/synthetic-data/out/qr/A01.png" "$data/Documents/g1/import/A01.png"

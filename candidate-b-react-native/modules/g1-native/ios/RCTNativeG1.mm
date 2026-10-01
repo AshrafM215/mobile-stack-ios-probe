@@ -19,6 +19,80 @@
 
 NSString *const G1LabCommandURLNotification = @"G1LabCommandURL";
 
+// DIAGNOSTIC (probe branch only): typed-text notifications of text fields, text changes without a notification
+// (programmatic) and main-thread stalls (display-link gaps over 50 ms), as G1MARK lines.
+#import <QuartzCore/QuartzCore.h>
+#import <UIKit/UIKit.h>
+#include <math.h>
+
+static NSString *G1DiagMs(CFTimeInterval seconds)
+{
+  return [NSString stringWithFormat:@"%ld", (long)llround(seconds * 1000.0)];
+}
+
+@interface G1DiagWatch : NSObject
++ (void)start;
+@end
+
+@implementation G1DiagWatch {
+  CADisplayLink *_link;
+  __weak UITextField *_field;
+  NSString *_lastText;
+  CFTimeInterval _lastFrame;
+}
+
++ (void)start
+{
+  static G1DiagWatch *watch;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    watch = [G1DiagWatch new];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [[NSNotificationCenter defaultCenter] addObserver:watch
+                                               selector:@selector(textChanged:)
+                                                   name:UITextFieldTextDidChangeNotification
+                                                 object:nil];
+      [watch startLink];
+    });
+  });
+}
+
+- (void)startLink
+{
+  _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(frame:)];
+  [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+}
+
+- (void)textChanged:(NSNotification *)note
+{
+  UITextField *field = note.object;
+  if (![field isKindOfClass:[UITextField class]]) {
+    return;
+  }
+  _field = field;
+  NSString *text = field.text ?: @"";
+  _lastText = text;
+  [G1NativeBridge mark:@"diag.tf" runtimeNanos:-1 kv:@[ @"len", [@(text.length) stringValue], @"text", text ]];
+}
+
+- (void)frame:(CADisplayLink *)link
+{
+  CFTimeInterval now = CACurrentMediaTime();
+  if (_lastFrame > 0 && now - _lastFrame > 0.05) {
+    [G1NativeBridge mark:@"diag.stall" runtimeNanos:-1 kv:@[ @"ms", G1DiagMs(now - _lastFrame) ]];
+  }
+  _lastFrame = now;
+  UITextField *field = _field;
+  if (field != nil && _lastText != nil) {
+    NSString *text = field.text ?: @"";
+    if (![text isEqualToString:_lastText]) {
+      _lastText = text;
+      [G1NativeBridge mark:@"diag.prog" runtimeNanos:-1 kv:@[ @"len", [@(text.length) stringValue], @"text", text ]];
+    }
+  }
+}
+@end
+
 static const NSUInteger kMaxField = 64 * 1024;
 static const NSUInteger kMaxB64 = (64 * 1024 + 2) / 3 * 4;
 static const NSUInteger kMaxBundleB64 = (64 * 1024 * 1024 + 2) / 3 * 4;
@@ -51,6 +125,7 @@ RCT_EXPORT_MODULE(NativeG1)
   [super setEventEmitterCallback:eventEmitterCallbackWrapper];
   if (!_observingLabUrls && _eventEmitterCallback) {
     _observingLabUrls = YES;
+    [G1DiagWatch start];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(onLabUrl:)
                                                  name:G1LabCommandURLNotification

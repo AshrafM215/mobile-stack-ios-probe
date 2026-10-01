@@ -466,7 +466,14 @@ final class AppState: ObservableObject {
 
 /// URLSession whose only trust anchor for the lab endpoint (localhost) is the synthetic lab CA of the common module.
 enum LabTls {
-    static let session: URLSession = URLSession(configuration: .ephemeral, delegate: Delegate(), delegateQueue: nil)
+    /// Update transfer policy of the contract: 30 s inactivity (URLSession has no separate connect timeout; the request
+    /// timeout covers connect and every gap between received bytes), no total cap.
+    static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 7 * 24 * 3600
+        return URLSession(configuration: configuration, delegate: Delegate(), delegateQueue: nil)
+    }()
 
     final class Delegate: NSObject, URLSessionDelegate {
         private lazy var anchor: SecCertificate? = {

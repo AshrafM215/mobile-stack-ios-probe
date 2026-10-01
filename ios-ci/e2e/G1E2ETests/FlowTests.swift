@@ -110,6 +110,31 @@ final class FlowTests: XCTestCase {
         check(a, waitFor(el(a, "home.title"), "label == '\(before)'", timeout: 20), "title language restored")
     }
 
+    /// DIAGNOSTIC (probe branch only): the same typing burst with candidate B's store notification of typed text
+    /// disabled (launch argument read by B only; A and C ignore it).
+    func test1bDiagQuietTyping() throws {
+        let a = launchReady(["-G1DiagQuiet", "YES"])
+        let field = el(a, "home.search.field")
+        field.tap()
+        field.typeText("SB1-F1-R001")
+        sleep(2)
+        let value = field.value as? String ?? "-"
+        print("G1_E2E diag quiet value=\(value)")
+        check(a, value == "SB1-F1-R001", "quiet typing value")
+    }
+
+    /// DIAGNOSTIC (probe branch only): one character per typeText call (XCUITest waits for the app to idle in between).
+    func test1cDiagCharByChar() throws {
+        let a = launchReady()
+        let field = el(a, "home.search.field")
+        field.tap()
+        for ch in "SB1-F1-R001" { field.typeText(String(ch)) }
+        sleep(2)
+        let value = field.value as? String ?? "-"
+        print("G1_E2E diag charbychar value=\(value)")
+        check(a, value == "SB1-F1-R001", "char-by-char typing value")
+    }
+
     func test2LargestAccessibilityTextSize() throws {
         let a = launchReady(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         check(a, el(a, "home.search.submit").exists, "search button at the largest text size")

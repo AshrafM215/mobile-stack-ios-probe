@@ -1,6 +1,7 @@
 // Candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Application state and the handlers shared by the UI and the lab hooks (the lab hooks call the same handlers).
 import * as G1 from 'g1-native';
+import { Platform, Settings } from 'react-native';
 
 import { BundleData, type GraphNode } from './core/bundleData';
 import { decodeBase64 } from './core/base64';
@@ -35,6 +36,55 @@ export const DEFAULT_UPDATE_URL = 'https://localhost:8443/update/G1SYN-update.zi
 
 export const lonOf = (xMm: number): number => (xMm * 100) / 11131949079;
 export const latOf = (yMm: number): number => (yMm * 10) / 1105742727;
+
+const INACTIVITY_MS = 30000;
+// DIAGNOSTIC (probe branch only): launch argument -G1DiagQuiet YES disables the store notification of typed text
+let diagQuiet: boolean | null = null;
+function isDiagQuiet(): boolean {
+  if (diagQuiet === null) {
+    try {
+      diagQuiet = Platform.OS === 'ios' && !!Settings.get('G1DiagQuiet');
+    } catch {
+      diagQuiet = false; // no settings module (unit tests)
+    }
+  }
+  return diagQuiet;
+}
+
+/** One GET through React Native's standard networking with the inactivity watchdog of the update transfer policy. */
+function download(url: string, onProgress: (percent: number) => void): Promise<{ status: number; body: Uint8Array | null }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
+    const stop = () => {
+      if (watchdog !== null) clearTimeout(watchdog);
+      watchdog = null;
+    };
+    const arm = () => {
+      stop();
+      watchdog = setTimeout(() => {
+        xhr.abort();
+        reject(new Error('inactivity timeout'));
+      }, INACTIVITY_MS);
+    };
+    xhr.open('GET', url);
+    xhr.responseType = 'arraybuffer';
+    xhr.onprogress = (e) => {
+      arm();
+      if (e.lengthComputable && e.total > 0) onProgress(Math.floor((e.loaded * 100) / e.total));
+    };
+    xhr.onload = () => {
+      stop();
+      resolve({ status: xhr.status, body: xhr.status === 200 ? new Uint8Array(xhr.response as ArrayBuffer) : null });
+    };
+    xhr.onerror = () => {
+      stop();
+      reject(new Error('network'));
+    };
+    arm();
+    xhr.send();
+  });
+}
 
 export class AppState {
   // ---------------- store plumbing (useSyncExternalStore) ----------------
@@ -238,7 +288,9 @@ export class AppState {
 
   setQuery = (text: string, fromField = true): void => {
     this.query = text;
+    if (fromField) G1.mark('diag.js', ['len', String(text.length), 'quiet', isDiagQuiet() ? '1' : '0']);
     if (!fromField) this.queryEpoch++;
+    if (fromField && isDiagQuiet()) return;
     this.notify();
   };
 
@@ -482,7 +534,12 @@ export class AppState {
     return true;
   }
 
-  /** Lab update with the candidate's standard HTTP client (fetch), lab origin only. */
+  /**
+   * Lab update with React Native's standard networking (XMLHttpRequest, which fetch is built on; it reports download
+   * progress), lab origin only, under the contract's update transfer policy: inactivity timeout 30 s (XMLHttpRequest has
+   * no separate connect phase, so the same watchdog covers connect and first byte), no total cap, slow state after 10 s,
+   * progress from Content-Length.
+   */
   update = async (url: string = DEFAULT_UPDATE_URL): Promise<string> => {
     this.openSettings();
     if (!url.startsWith(LAB_UPDATE_ORIGIN)) {
@@ -501,24 +558,26 @@ export class AppState {
         this.notify();
       }
     }, 10000);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 40000);
     try {
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await download(url, (percent) => {
+        if (percent !== this.updatePercent) {
+          this.updatePercent = percent;
+          this.notify();
+        }
+      });
       if (res.status === 404) {
         this.updateStatus = 'none';
         this.mark('update.state', ['state', 'none']);
         this.notify();
         return 'NONE';
       }
-      if (res.status !== 200) throw new Error('status');
-      const buf = new Uint8Array(await res.arrayBuffer());
-      if (buf.length > 64 * 1024 * 1024) throw new Error('too large');
+      if (res.status !== 200 || res.body === null) throw new Error('status');
+      if (res.body.length > 64 * 1024 * 1024) throw new Error('too large');
       this.updatePercent = 100;
       this.updateStatus = 'done';
       this.mark('update.state', ['state', 'downloaded']);
       const { encodeBase64 } = await import('./core/base64');
-      const code = await G1.NativeG1.importBundleBase64(encodeBase64(buf), 'update');
+      const code = await G1.NativeG1.importBundleBase64(encodeBase64(res.body), 'update');
       await this.afterBundleChange(code);
       return code;
     } catch {
@@ -528,7 +587,6 @@ export class AppState {
       return 'FAILED';
     } finally {
       clearTimeout(slow);
-      clearTimeout(timeout);
     }
   };
 
