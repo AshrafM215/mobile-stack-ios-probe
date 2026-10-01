@@ -1,0 +1,22 @@
+# Build outputs and local tool state
+build/
+DerivedData/
+evidence/
+node_modules/
+Pods/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+xcuserdata/
+.idea/
+*.iml
+local.properties
+gradle-wrapper.jar
+candidate-c-native/ios/G1CandidateC.xcodeproj/
+candidate-c-native/ios/G1CandidateC/Info.plist
+.env
+.env.*
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

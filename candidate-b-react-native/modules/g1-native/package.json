@@ -1,0 +1,30 @@
+{
+  "name": "g1-native",
+  "version": "0.1.0",
+  "private": true,
+  "description": "G1 synthetic native bridge for candidate B - NON-PRODUCTION / SYNTHETIC DATA ONLY.",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "ios",
+    "G1Native.podspec"
+  ],
+  "peerDependencies": {
+    "react-native": "*"
+  },
+  "codegenConfig": {
+    "name": "G1NativeSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.example.g1bench.g1native"
+    },
+    "ios": {
+      "modulesProvider": {
+        "NativeG1Ar": "RCTNativeG1Ar"
+      }
+    }
+  }
+}

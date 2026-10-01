@@ -1,0 +1,22 @@
+name: g1_candidate_a
+description: "G1 candidate A (Flutter) - NON-PRODUCTION / SYNTHETIC DATA ONLY."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  maplibre_gl: 0.27.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/probe-style-v0.json

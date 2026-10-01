@@ -1,0 +1,83 @@
+# G1 candidate C (native iOS reference) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+# XcodeGen 2.46.0 project definition; the generated .xcodeproj is not tracked.
+name: G1CandidateC
+options:
+  bundleIdPrefix: com.example.g1bench
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    exactVersion: 6.28.0
+targets:
+  G1CandidateC:
+    type: application
+    platform: iOS
+    sources:
+      - path: G1CandidateC
+    dependencies:
+      - package: MapLibre
+        product: MapLibre
+      - sdk: ARKit.framework
+    info:
+      path: G1CandidateC/Info.plist
+      properties:
+        CFBundleDisplayName: "G1 Candidate C"
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ar]
+        UILaunchScreen: {}
+        NSCameraUsageDescription: "Synthetic AR and QR feasibility checks only (non-production)."
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.g1bench.candidatec
+        TARGETED_DEVICE_FAMILY: "1,2"
+  G1CandidateCTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: G1CandidateCTests
+    dependencies:
+      - target: G1CandidateC
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.g1bench.candidatec.tests
+        GENERATE_INFOPLIST_FILE: YES
+  G1CandidateCUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: G1CandidateCUITests
+    dependencies:
+      - target: G1CandidateC
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.g1bench.candidatec.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: G1CandidateC
+schemes:
+  G1CandidateC:
+    build:
+      targets:
+        G1CandidateC: all
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - G1CandidateCTests
+        - G1CandidateCUITests

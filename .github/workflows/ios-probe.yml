@@ -1,0 +1,48 @@
+# Synthetic iOS build/simulator feasibility probe - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+# Standard GitHub-hosted macOS runners only. Results are development/probe evidence.
+name: iOS feasibility probe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: ${{ matrix.candidate }}
+    runs-on: macos-26
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [candidate-a-flutter, candidate-b-react-native, candidate-c-native]
+    env:
+      EVIDENCE_DIR: ${{ github.workspace }}/evidence
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node 24.13.1
+        if: matrix.candidate == 'candidate-b-react-native'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.13.1
+          package-manager-cache: false
+      - name: Probe
+        run: bash ios-ci/probe-${{ matrix.candidate }}.sh
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ matrix.candidate }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
