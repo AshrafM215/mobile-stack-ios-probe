@@ -65,7 +65,7 @@ public enum G1Native {
         #endif
     }
 
-    /// Idempotent; loads the compiled-in trust store and opens the private bundle store (Application Support/g1bundle).
+    /// Idempotent; loads the compiled-in trust store and opens the private bundle store (Library/G1/g1bundle).
     public static func initialize(appId: String, storeRoot: URL? = nil) {
         lock.lock(); defer { lock.unlock() }
         if initialized { return }
@@ -74,8 +74,10 @@ public enum G1Native {
             fatalError("G1 trust store missing")
         }
         trust = store
-        let root = storeRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("g1bundle", isDirectory: true)
+        // Library/G1/g1bundle: app-private, excluded from backup, and free of spaces so that the map style can address
+        // the verified bundle files with plain file:// URLs (Application Support contains a space).
+        let root = storeRoot ?? FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("G1", isDirectory: true).appendingPathComponent("g1bundle", isDirectory: true)
         bundles = BundleStore(root: root, store: store, clock: { IsoTime.nowMs() })
         initialized = true
         G1Trace.mark("app.start", [("process_start_ns", String(processStartUptimeNanos()))])
@@ -290,6 +292,14 @@ public enum G1Native {
         }
     }
 
+    /// Closes the common AR screen of a request from the runtime (navigation away or lab automation).
+    public static func closeAr(requestId: String) {
+        lock.lock()
+        let screen = arScreens[requestId]
+        lock.unlock()
+        screen?.closeFromRuntime()
+    }
+
     public static func setArGuidance(requestId: String, allowed: Bool) {
         lock.lock()
         let screen = arScreens[requestId]
@@ -364,6 +374,12 @@ public enum G1Native {
 
     @discardableResult
     public static func writeOut(_ name: String, _ text: String) throws -> String { try G1Files.writeOut(name, Data(text.utf8)) }
+
+    /// PEM of the synthetic lab CA (the only trust anchor of the lab update endpoint), for runtimes with their own TLS stack.
+    public static func labCa() -> String? {
+        guard let url = resourceURL("g1_lab_ca", "pem"), let data = try? Data(contentsOf: url) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
 
     public static func readImportText(_ name: String) throws -> String { String(decoding: try G1Files.readImport(name), as: UTF8.self) }
 

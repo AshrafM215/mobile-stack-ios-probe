@@ -18,4 +18,9 @@ for rel, name in (("bundle/G1SYN-1.0.0.zip", "G1SYN-1.0.0.zip"), ("app/trust_sto
         sys.exit("G1 asset %s does not match GENERATION_RECORD.json" % rel)
     (dest / name).write_bytes(data)
     print("asset", name, digest)
+ca = (out.parent.parent / "shared/lab/g1_lab_ca.pem").read_bytes()
+if hashlib.sha256(ca).hexdigest() != "2675cc7e4dbf718595833f39920bbd45ce3fb6652a5d49f2cd2b7977a20212d7":
+    sys.exit("G1 lab CA does not match its pinned SHA-256")
+(dest / "g1_lab_ca.pem").write_bytes(ca)
+print("asset g1_lab_ca.pem", hashlib.sha256(ca).hexdigest())
 PY

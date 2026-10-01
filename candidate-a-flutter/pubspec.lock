@@ -88,6 +88,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  g1_native:
+    dependency: "direct main"
+    description:
+      path: "packages/g1_native"
+      relative: true
+    source: path
+    version: "0.1.0"
   image:
     dependency: transitive
     description:
@@ -245,6 +252,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  unorm_dart:
+    dependency: "direct main"
+    description:
+      name: unorm_dart
+      sha256: "0c69186b03ca6addab0774bcc0f4f17b88d4ce78d9d4d8f0619e30a99ead58e7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.2"
   vector_math:
     dependency: transitive
     description:
@@ -271,4 +286,4 @@ packages:
     version: "1.1.1"
 sdks:
   dart: ">=3.13.4 <4.0.0"
-  flutter: ">=3.29.0"
+  flutter: ">=3.47.0"

@@ -57,6 +57,8 @@ public final class G1NativeBridge: NSObject {
     }
 
     @objc public static func setArGuidance(_ requestId: String, allowed: Bool) { G1Native.setArGuidance(requestId: requestId, allowed: allowed) }
+
+    @objc public static func closeAr(_ requestId: String) { G1Native.closeAr(requestId: requestId) }
     #endif
 
     /// [length << 32 | crc, native entry nanos]
@@ -90,6 +92,8 @@ public final class G1NativeBridge: NSObject {
     @objc public static func writeOut(_ name: String, text: String) -> String? { try? G1Native.writeOut(name, text) }
 
     @objc public static func readImportText(_ name: String) -> String? { try? G1Native.readImportText(name) }
+
+    @objc public static func labCa() -> String? { G1Native.labCa() }
 
     @objc public static func readImportBase64(_ name: String) -> String? { (try? G1Native.readImportBytes(name))?.base64EncodedString() }
 

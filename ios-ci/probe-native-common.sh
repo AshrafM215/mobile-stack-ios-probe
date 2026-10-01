@@ -5,7 +5,6 @@ source "$(dirname "$0")/probe-common.sh"
 N=native-common
 select_xcode
 capture_env "$N"
-python3 -m pip install --quiet --disable-pip-version-check cryptography==46.0.7 > "$EVIDENCE_DIR/$N-pip.txt" 2>&1
 bash "$(dirname "$0")/prepare-data.sh"
 UDID=$(create_simulator G1Probe-N)
 cd native-common/ios

@@ -14,7 +14,10 @@ npm ci --ignore-scripts --no-audit --no-fund > "$EVIDENCE_DIR/data-npm-ci.txt" 2
 node fetch-inputs.mjs "$WORK_DIR/g1-fonts" > "$EVIDENCE_DIR/data-fetch-inputs.txt" 2>&1
 rm -rf "$WORK_DIR/g1-out"
 node generate.mjs --out "$WORK_DIR/g1-out" --fonts "$WORK_DIR/g1-fonts" --w-start 2026-10-01T00:00:00Z > "$EVIDENCE_DIR/data-generate.txt" 2>&1
-python3 check/verify.py "$WORK_DIR/g1-out" > "$EVIDENCE_DIR/data-verify.json"
+# independent verifier in a private virtual environment (the runner's Python is externally managed, PEP 668)
+python3 -m venv "$WORK_DIR/g1-venv"
+"$WORK_DIR/g1-venv/bin/python" -m pip install --quiet --disable-pip-version-check cryptography==46.0.7 > "$EVIDENCE_DIR/data-pip.txt" 2>&1
+"$WORK_DIR/g1-venv/bin/python" check/verify.py "$WORK_DIR/g1-out" > "$EVIDENCE_DIR/data-verify.json"
 python3 - "$WORK_DIR/g1-out" out "$EVIDENCE_DIR/data-regeneration.json" <<'PY'
 import hashlib, json, pathlib, shutil, sys
 new, committed, report = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])

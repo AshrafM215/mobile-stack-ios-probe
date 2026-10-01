@@ -140,6 +140,8 @@ public final class ArViewController: UIViewController, ARSessionDelegate {
         sceneView?.session.pause()
     }
 
+    public func closeFromRuntime() { DispatchQueue.main.async { self.closeWith("runtime") } }
+
     /// Runtime grant/revoke of guidance (the runtime checks trust and route state); the arrow policy is re-evaluated at once.
     public func setGuidance(_ allowed: Bool) {
         DispatchQueue.main.async {

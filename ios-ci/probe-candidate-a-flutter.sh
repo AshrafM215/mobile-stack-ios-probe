@@ -8,6 +8,7 @@ FLUTTER_ZIP_SHA256=d4dd908b5f8f65515831b6d68ae33307a813f2b68947dded7a1994ee5ea7c
 
 select_xcode
 capture_env "$C"
+bash "$(dirname "$0")/prepare-data.sh"
 curl -fsSL --retry 3 -o "$RUNNER_TEMP/flutter.zip" "$FLUTTER_ZIP_URL"
 echo "$FLUTTER_ZIP_SHA256  $RUNNER_TEMP/flutter.zip" | shasum -a 256 -c -
 unzip -q "$RUNNER_TEMP/flutter.zip" -d "$RUNNER_TEMP/sdk"
@@ -23,6 +24,8 @@ cd "$C"
 APP=build/ios/iphonesimulator/Runner.app
 hash_tree "$APP" "$C-simulator-app"
 UDID=$(create_simulator G1Probe-A)
-launch_and_capture "$UDID" "$APP" com.example.g1bench.candidatea "$C"
+launch_and_wait_ready "$UDID" "$APP" com.example.g1bench.candidatea "$C"
+"${F[@]}" build ios --release --no-codesign 2>&1 | tee "$EVIDENCE_DIR/$C-build-iphoneos-unsigned.txt"
+hash_tree build/ios/iphoneos/Runner.app "$C-iphoneos-unsigned-app"
 cp ios/Podfile.lock "$EVIDENCE_DIR/$C-Podfile.lock" 2>/dev/null || true
 find ios -name Package.resolved -exec cp {} "$EVIDENCE_DIR/$C-Package.resolved" \; || true

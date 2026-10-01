@@ -14,7 +14,9 @@ final class LaunchUITests: XCTestCase {
         let loaded = expectation(for: NSPredicate(format: "label CONTAINS 'style loaded'"), evaluatedWith: status)
         wait(for: [loaded], timeout: 90)
         app.buttons["checkAR"].tap()
-        XCTAssertTrue(app.staticTexts["arStatus"].label.contains("unsupported"))
+        let ar = app.staticTexts["arStatus"]
+        let unsupported = expectation(for: NSPredicate(format: "label CONTAINS 'unsupported'"), evaluatedWith: ar)
+        wait(for: [unsupported], timeout: 30)
     }
 
     @available(iOS 17.0, *)

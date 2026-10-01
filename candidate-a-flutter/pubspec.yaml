@@ -9,7 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  g1_native:
+    path: packages/g1_native
   maplibre_gl: 0.27.1
+  unorm_dart: 0.3.2
 
 dev_dependencies:
   flutter_test:
@@ -19,4 +22,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/probe-style-v0.json
+    - assets/strings/en.json
+    - assets/strings/ar.json

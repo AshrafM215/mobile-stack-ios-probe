@@ -78,6 +78,29 @@ launch_and_capture() {
   fi
 }
 
+# Full candidate apps: install, launch, wait for the READY marker (G1MARK app.ready in the unified log, subsystem
+# com.example.g1bench), then capture a screenshot and the markers.
+launch_and_wait_ready() {
+  local udid="$1" app="$2" bundle="$3" candidate="$4" i
+  xcrun simctl install "$udid" "$app"
+  xcrun simctl launch "$udid" "$bundle" | tee "$EVIDENCE_DIR/$candidate-launch.txt"
+  for i in $(seq 1 45); do
+    sleep 4
+    xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'subsystem == "com.example.g1bench"' \
+      > "$EVIDENCE_DIR/$candidate-markers.txt" 2>/dev/null || true
+    if grep -q "name=app.ready" "$EVIDENCE_DIR/$candidate-markers.txt"; then break; fi
+  done
+  sleep 5
+  xcrun simctl io "$udid" screenshot "$EVIDENCE_DIR/$candidate-ready.png"
+  xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'subsystem == "com.example.g1bench"' \
+    > "$EVIDENCE_DIR/$candidate-markers.txt" || true
+  if ! grep -q "name=app.ready" "$EVIDENCE_DIR/$candidate-markers.txt"; then
+    echo "READY marker missing" >&2
+    return 6
+  fi
+  grep -o "G1MARK v=1 .*" "$EVIDENCE_DIR/$candidate-markers.txt" | sed 's/ t=[0-9]* / /' > "$EVIDENCE_DIR/$candidate-markers-normalized.txt" || true
+}
+
 hash_tree() {
   local path="$1" name="$2"
   (cd "$(dirname "$path")" && find "$(basename "$path")" -type f -print0 | sort -z | xargs -0 shasum -a 256) \
