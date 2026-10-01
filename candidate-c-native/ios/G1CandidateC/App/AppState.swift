@@ -119,6 +119,12 @@ final class AppState: ObservableObject {
         NextFrame.run { t in waiters.forEach { $0(t) } }
     }
 
+    /// Idle point (G1-CIC-1.0): a timed handler never starts inside a frame callback (a block queued on the main queue).
+    @MainActor
+    func idle() async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in DispatchQueue.main.async { c.resume() } }
+    }
+
     /// Resolves with nowNanos() at the first CADisplayLink frame after the SwiftUI update that applied the current state.
     @MainActor
     func nextFrame() async -> UInt64 {

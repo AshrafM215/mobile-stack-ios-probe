@@ -137,15 +137,15 @@ class AppState extends ChangeNotifier {
     if (_ready || !_homeShown || !styleLoaded || !trusted || index == null) return;
     _ready = true;
     final rt = now();
-    SchedulerBinding.instance.addPostFrameCallback((_) => unawaited(G1Native.reportReady(rt)));
+    // the first frame callback after the READY predicate holds (G1-CIC-1.0 frame rule)
+    SchedulerBinding.instance.scheduleFrameCallback((_) => unawaited(G1Native.reportReady(rt)));
   }
 
   bool get ready => _ready;
 
   void onResumed() {
     final rt = now();
-    SchedulerBinding.instance.addPostFrameCallback((_) => unawaited(G1Native.reportResumeReady(rt)));
-    SchedulerBinding.instance.scheduleFrame();
+    SchedulerBinding.instance.scheduleFrameCallback((_) => unawaited(G1Native.reportResumeReady(rt)));
   }
 
   // ---------------- navigation ----------------
@@ -464,10 +464,13 @@ class AppState extends ChangeNotifier {
   // ---------------- frames ----------------
 
   /// Completes at the first frame callback after the current state has been applied.
+  /// Resolves with now() at the first frame callback after the frame that applied the current state (G1-CIC-1.0 frame
+  /// rule): the post-frame callback of the frame that built the state registers a transient callback for the next frame.
   Future<int> nextFrame() {
     final c = Completer<int>();
-    SchedulerBinding.instance.addPostFrameCallback((_) => c.complete(now()));
-    SchedulerBinding.instance.scheduleFrame();
+    final binding = SchedulerBinding.instance;
+    binding.addPostFrameCallback((_) => binding.scheduleFrameCallback((_) => c.complete(now())));
+    binding.scheduleFrame();
     return c.future;
   }
 

@@ -16,7 +16,7 @@ npx jest --ci 2>&1 | tee "$EVIDENCE_DIR/$C-unit-tests.txt"
 (cd ios && pod install 2>&1 | tee "$EVIDENCE_DIR/$C-pod-install.txt")
 UDID=$(create_simulator G1Probe-B)
 xcodebuild -workspace ios/G1CandidateB.xcworkspace -scheme G1CandidateB -configuration Release -sdk iphonesimulator \
-  -destination "id=$UDID" -derivedDataPath ios/build/dd CODE_SIGNING_ALLOWED=NO build 2>&1 \
+  -destination "id=$UDID" ONLY_ACTIVE_ARCH=YES -derivedDataPath ios/build/dd CODE_SIGNING_ALLOWED=NO build 2>&1 \
   | tee "$EVIDENCE_DIR/$C-build-simulator.txt"
 APP=ios/build/dd/Build/Products/Release-iphonesimulator/G1CandidateB.app
 hash_tree "$APP" "$C-simulator-app"

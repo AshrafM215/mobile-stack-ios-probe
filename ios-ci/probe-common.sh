@@ -116,18 +116,28 @@ fetch_xcodegen() {
 }
 
 # Shared end-to-end UI flow (ios-ci/e2e) against the installed candidate app; the injected QR image is placed in the app's
-# lab import folder first (lab hook qr.inject through the candidate's URL scheme).
+# lab import folder first (lab hook qr.inject through the candidate's URL scheme). The G1MARK markers of the test session
+# are streamed to the evidence folder and the test attachments (screenshots) are exported from the result bundle.
 run_e2e() {
-  local udid="$1" bundle="$2" scheme="$3" candidate="$4" data
+  local udid="$1" bundle="$2" scheme="$3" candidate="$4" data stream_pid rc=0
   fetch_xcodegen
   data=$(xcrun simctl get_app_container "$udid" "$bundle" data)
   mkdir -p "$data/Documents/g1/import"
   cp "$PROBE_ROOT/synthetic-data/out/qr/A01.png" "$data/Documents/g1/import/A01.png"
   (cd "$PROBE_ROOT/ios-ci/e2e" && "$XG" generate --spec project.yml) > "$EVIDENCE_DIR/$candidate-e2e-xcodegen.txt" 2>&1
+  xcrun simctl spawn "$udid" log stream --style compact --level info --predicate 'subsystem == "com.example.g1bench"' \
+    > "$EVIDENCE_DIR/$candidate-e2e-markers.txt" 2>&1 &
+  stream_pid=$!
+  sleep 3
   TEST_RUNNER_G1_BUNDLE_ID="$bundle" TEST_RUNNER_G1_URL_SCHEME="$scheme" \
     xcodebuild -project "$PROBE_ROOT/ios-ci/e2e/G1E2E.xcodeproj" -scheme G1E2E -destination "id=$udid" \
     -derivedDataPath "$RUNNER_TEMP/e2e-dd-$candidate" -resultBundlePath "$EVIDENCE_DIR/$candidate-e2e.xcresult" \
-    CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$EVIDENCE_DIR/$candidate-e2e.txt"
+    CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$EVIDENCE_DIR/$candidate-e2e.txt" || rc=$?
+  kill "$stream_pid" 2>/dev/null || true
+  wait "$stream_pid" 2>/dev/null || true
+  xcrun xcresulttool export attachments --path "$EVIDENCE_DIR/$candidate-e2e.xcresult" \
+    --output-path "$EVIDENCE_DIR/$candidate-e2e-attachments" > "$EVIDENCE_DIR/$candidate-e2e-attachments.txt" 2>&1 || true
+  return "$rc"
 }
 
 hash_tree() {

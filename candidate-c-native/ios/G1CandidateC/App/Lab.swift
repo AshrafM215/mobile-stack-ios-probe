@@ -147,6 +147,8 @@ final class LabController {
         var search: [Any] = []
         for q in data.queries {
             s.query = q.text
+            _ = await s.nextFrame() // the typed query is on screen before the timed submit
+            await s.idle()
             let t0 = now()
             let compute = s.submitSearch()
             let t1 = Int64(await s.nextFrame())
@@ -158,6 +160,7 @@ final class LabController {
         for c in data.routeCases {
             s.openRoute(c.destination, origin: c.origin, stepFree: c.stepFree, blocked: c.blocked)
             _ = await s.nextFrame()
+            await s.idle()
             let t0 = now()
             let compute = s.computeRoute()
             let t1 = Int64(await s.nextFrame())

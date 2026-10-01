@@ -57,6 +57,8 @@ const SIZES: Record<string, number> = { '64B': 64, '4KiB': 4096, '64KiB': 65536 
 const TWO_32 = 4294967296;
 const offsetOf = (seq: number, size: number): number => (seq * 64) % (65536 - size + 1);
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** Idle point (G1-CIC-1.0): a timed handler never starts inside a frame callback (a zero-delay timer task). */
+const idle = (): Promise<void> => delay(0);
 
 type Series = {
   kind: 'control' | 'measured';
@@ -237,6 +239,8 @@ export class LabController {
     const search: Array<Record<string, unknown>> = [];
     for (const q of data.queries) {
       s.setQuery(q.text, false);
+      await s.nextFrame(); // the typed query is on screen before the timed submit
+      await idle();
       const t0 = this.now();
       const compute = s.submitSearch();
       const t1 = await s.nextFrame();
@@ -248,6 +252,7 @@ export class LabController {
     for (const c of data.routeCases) {
       s.openRoute(c.destination, c.origin, c.stepFree, c.blocked);
       await s.nextFrame();
+      await idle();
       const t0 = this.now();
       const compute = s.computeRoute();
       const t1 = await s.nextFrame();

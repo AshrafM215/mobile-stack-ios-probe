@@ -1,7 +1,7 @@
 // Candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Screens S01-S09 of G1-CIC-1.0 plus the anchor-code result and data/trust screens. Every contract id is a testID
 // (resource-id on Android, accessibilityIdentifier on iOS).
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useLayoutEffect } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -95,8 +95,9 @@ function resultStatus(s: Strings, outcome: string, count: number, query: string)
 function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
   const s = state.s;
   const enabled = state.trusted && state.index !== null;
-  useEffect(() => {
-    if (enabled) requestAnimationFrame(() => state.homeShown());
+  // home shown: the first frame callback after the frame that mounted the enabled home screen (G1-CIC-1.0 frame rule)
+  useLayoutEffect(() => {
+    if (enabled) requestAnimationFrame(() => requestAnimationFrame(() => state.homeShown()));
   }, [enabled, state]);
   const results = state.results;
   const data = state.data;

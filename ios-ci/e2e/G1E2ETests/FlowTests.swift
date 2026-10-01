@@ -27,6 +27,15 @@ final class FlowTests: XCTestCase {
         add(shot)
     }
 
+    /// Fails the test with the element tree printed and a screenshot attached (diagnostics on the hosted runner).
+    private func check(_ a: XCUIApplication, _ ok: Bool, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
+        if !ok {
+            print("G1_E2E failure: \(message)\n\(a.debugDescription)")
+            attach(a, "failure-\(message)")
+        }
+        XCTAssertTrue(ok, message, file: file, line: line)
+    }
+
     private func waitFor(_ e: XCUIElement, _ predicate: String, timeout: TimeInterval) -> Bool {
         let x = XCTNSPredicateExpectation(predicate: NSPredicate(format: predicate), object: e)
         return XCTWaiter.wait(for: [x], timeout: timeout) == .completed
@@ -36,9 +45,9 @@ final class FlowTests: XCTestCase {
     private func launchReady(_ arguments: [String] = []) -> XCUIApplication {
         let a = app(arguments)
         a.launch()
-        XCTAssertTrue(el(a, "home.title").waitForExistence(timeout: 120), "home.title")
-        XCTAssertTrue(el(a, "home.search.field").waitForExistence(timeout: 60), "home.search.field")
-        XCTAssertTrue(waitFor(el(a, "home.trust"), "label CONTAINS 'G1SYN-1.0.0'", timeout: 90), "trusted bundle")
+        check(a, el(a, "home.title").waitForExistence(timeout: 120), "home.title")
+        check(a, el(a, "home.search.field").waitForExistence(timeout: 60), "home.search.field")
+        check(a, waitFor(el(a, "home.trust"), "label CONTAINS 'G1SYN-1.0.0'", timeout: 90), "trusted bundle")
         return a
     }
 
@@ -59,43 +68,43 @@ final class FlowTests: XCTestCase {
         field.tap()
         field.typeText("SB1-F1-R001")
         el(a, "home.search.submit").tap()
-        XCTAssertTrue(el(a, "home.result.D001").waitForExistence(timeout: 30), "unique result D001")
-        XCTAssertTrue(el(a, "home.results.status").exists, "results status")
+        check(a, el(a, "home.result.D001").waitForExistence(timeout: 30), "unique result D001")
+        check(a, el(a, "home.results.status").exists, "results status")
         attach(a, "results")
         el(a, "home.result.D001").tap()
-        XCTAssertTrue(el(a, "details.code").waitForExistence(timeout: 30), "details")
-        XCTAssertTrue(waitFor(el(a, "details.code"), "label == 'SB1-F1-R001'", timeout: 10), "details.code value")
-        XCTAssertTrue(scrollTo(a, "details.schedule.item.SYN-COURSE-001").exists, "schedule item")
+        check(a, el(a, "details.code").waitForExistence(timeout: 30), "details")
+        check(a, waitFor(el(a, "details.code"), "label == 'SB1-F1-R001'", timeout: 10), "details.code value")
+        check(a, scrollTo(a, "details.schedule.item.SYN-COURSE-001").exists, "schedule item")
         attach(a, "details")
         scrollTo(a, "details.route").tap()
-        XCTAssertTrue(el(a, "route.compute").waitForExistence(timeout: 30), "route screen")
+        check(a, el(a, "route.compute").waitForExistence(timeout: 30), "route screen")
         el(a, "route.compute").tap()
-        XCTAssertTrue(scrollTo(a, "route.summary").waitForExistence(timeout: 30), "route summary")
-        XCTAssertTrue(scrollTo(a, "route.step.0").exists, "first step")
+        check(a, scrollTo(a, "route.summary").waitForExistence(timeout: 30), "route summary")
+        check(a, scrollTo(a, "route.step.0").exists, "first step")
         attach(a, "route")
         scrollTo(a, "route.ar").tap()
-        XCTAssertTrue(el(a, "fallback.title").waitForExistence(timeout: 30), "text fallback (no ARKit world tracking on the simulator)")
-        XCTAssertTrue(el(a, "fallback.message").exists, "fallback message")
+        check(a, el(a, "fallback.title").waitForExistence(timeout: 30), "text fallback (no ARKit world tracking on the simulator)")
+        check(a, el(a, "fallback.message").exists, "fallback message")
         attach(a, "fallback")
         scrollTo(a, "fallback.back").tap()
-        XCTAssertTrue(el(a, "route.back").waitForExistence(timeout: 20), "back to route")
+        check(a, el(a, "route.back").waitForExistence(timeout: 20), "back to route")
         el(a, "route.back").tap()
-        XCTAssertTrue(el(a, "details.back").waitForExistence(timeout: 20), "back to details")
+        check(a, el(a, "details.back").waitForExistence(timeout: 20), "back to details")
         el(a, "details.back").tap()
-        XCTAssertTrue(el(a, "home.result.D001").waitForExistence(timeout: 20), "home keeps the results")
+        check(a, el(a, "home.result.D001").waitForExistence(timeout: 20), "home keeps the results")
         // T14: the language switch keeps the state (results stay on screen)
         let before = el(a, "home.title").label
         el(a, "home.lang").tap()
-        XCTAssertTrue(waitFor(el(a, "home.title"), "label != '\(before)'", timeout: 20), "title language changed")
-        XCTAssertTrue(el(a, "home.result.D001").exists, "results kept after the language switch")
+        check(a, waitFor(el(a, "home.title"), "label != '\(before)'", timeout: 20), "title language changed")
+        check(a, el(a, "home.result.D001").exists, "results kept after the language switch")
         attach(a, "language-switched")
         el(a, "home.lang").tap()
-        XCTAssertTrue(waitFor(el(a, "home.title"), "label == '\(before)'", timeout: 20), "title language restored")
+        check(a, waitFor(el(a, "home.title"), "label == '\(before)'", timeout: 20), "title language restored")
     }
 
     func test2LargestAccessibilityTextSize() throws {
         let a = launchReady(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
-        XCTAssertTrue(el(a, "home.search.submit").exists, "search button at the largest text size")
+        check(a, el(a, "home.search.submit").exists, "search button at the largest text size")
         attach(a, "largest-text")
     }
 
@@ -118,10 +127,10 @@ final class FlowTests: XCTestCase {
         let a = launchReady()
         let args = #"{"file":"A01.png"}"#.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         a.open(URL(string: "\(scheme)://cmd?name=qr.inject&args=\(args)")!)
-        XCTAssertTrue(el(a, "qr.result").waitForExistence(timeout: 30), "anchor-code result screen")
-        XCTAssertFalse(el(a, "qr.result").label.contains("["), "result text resolved")
+        check(a, el(a, "qr.result").waitForExistence(timeout: 30), "anchor-code result screen")
+        check(a, !el(a, "qr.result").label.contains("["), "result text resolved")
         attach(a, "qr-result")
         el(a, "qr.close").tap()
-        XCTAssertTrue(el(a, "home.search.field").waitForExistence(timeout: 20), "back home")
+        check(a, el(a, "home.search.field").waitForExistence(timeout: 20), "back home")
     }
 }

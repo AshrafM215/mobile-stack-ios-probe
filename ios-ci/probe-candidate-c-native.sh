@@ -18,7 +18,7 @@ xcodebuild -project G1CandidateC.xcodeproj -scheme G1CandidateC -destination "id
   -resultBundlePath "$EVIDENCE_DIR/$C-tests.xcresult" CODE_SIGNING_ALLOWED=NO test 2>&1 \
   | tee "$EVIDENCE_DIR/$C-tests.txt"
 xcodebuild -project G1CandidateC.xcodeproj -scheme G1CandidateC -configuration Release -sdk iphonesimulator \
-  -destination "id=$UDID" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build 2>&1 \
+  -destination "id=$UDID" ONLY_ACTIVE_ARCH=YES -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build 2>&1 \
   | tee "$EVIDENCE_DIR/$C-build-simulator.txt"
 APP=build/dd/Build/Products/Release-iphonesimulator/G1CandidateC.app
 hash_tree "$APP" "$C-simulator-app"

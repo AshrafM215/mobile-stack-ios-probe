@@ -115,7 +115,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _field.text = state.query;
     }
     final enabled = state.trusted && state.index != null;
-    if (enabled) SchedulerBinding.instance.addPostFrameCallback((_) => state.homeShown());
+    // home shown: the first frame callback after the frame that built the enabled home screen (G1-CIC-1.0 frame rule)
+    if (enabled) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => SchedulerBinding.instance.scheduleFrameCallback((_) => state.homeShown()));
+    }
     final results = state.results;
     return Scaffold(
       appBar: AppBar(

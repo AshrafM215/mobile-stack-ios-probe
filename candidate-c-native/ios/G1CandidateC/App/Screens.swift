@@ -151,6 +151,8 @@ struct HomeScreen: View {
                                 }
                             }
                         }
+                        // a container element: an identifier on a plain container would be applied to its children too
+                        .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("home.results.list")
                     }
                 } else {

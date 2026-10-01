@@ -54,10 +54,14 @@ export class AppState {
     waiters.forEach((w) => w());
   }
 
-  /** Resolves at the first requestAnimationFrame after the next commit of the current state. */
+  /**
+   * Resolves at the first frame callback after the frame that applied the current state (G1-CIC-1.0 frame rule): the
+   * committed tree is mounted in the frame of the first requestAnimationFrame after the commit, so the second one is the
+   * first frame callback after it.
+   */
   nextFrame(): Promise<number> {
     return new Promise((resolve) => {
-      this.commitWaiters.push(() => requestAnimationFrame(() => resolve(G1.nowNanos())));
+      this.commitWaiters.push(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve(G1.nowNanos()))));
       this.notify();
     });
   }

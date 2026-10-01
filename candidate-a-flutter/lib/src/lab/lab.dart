@@ -174,6 +174,10 @@ class LabController {
 
   // ---------------------------------------------------------------- B07-SEARCH / B03-ROUTING-GRAPH
 
+  /// Idle point (G1-CIC-1.0): a timed handler never starts inside a frame callback; the loop yields to the event loop
+  /// (a zero-duration timer runs after the current frame task has completed).
+  Future<void> _idle() => Future<void>(() {});
+
   Future<void> _benchSearchRoute(String runId, String kind) async {
     final data = state.data;
     if (data == null) return;
@@ -184,6 +188,8 @@ class LabController {
     final search = <Map<String, Object?>>[];
     for (final q in data.queries) {
       state.setQuery(q.text, fromField: false);
+      await state.nextFrame(); // the typed query is on screen before the timed submit
+      await _idle();
       final t0 = now();
       final compute = state.submitSearch();
       final t1 = await state.nextFrame();
@@ -195,6 +201,7 @@ class LabController {
     for (final c in data.routeCases) {
       state.openRoute(c.destination, fromOrigin: c.origin, stepFreeOnly: c.stepFree, blockedEdges: c.blocked);
       await state.nextFrame();
+      await _idle();
       final t0 = now();
       final compute = state.computeRoute();
       final t1 = await state.nextFrame();

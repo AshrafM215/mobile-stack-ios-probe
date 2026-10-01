@@ -265,7 +265,8 @@
       "android": "Activity.reportFullyDrawn() once per process + G1MARK app.ready",
       "ios": "G1MARK app.ready"
     },
-    "resume": "RESUME_READY = after a foreground return, the home (or retained) screen is interactive and the map surface is restored; G1MARK app.resume.ready"
+    "resume": "RESUME_READY = after a foreground return, the home (or retained) screen is interactive and the map surface is restored; G1MARK app.resume.ready",
+    "frame_rule": "frame rule for every frame-aligned signal (home shown, bench e2e_ns): the first frame callback after the frame that applied the state (A: SchedulerBinding.scheduleFrameCallback registered from the post-frame callback of the frame that built the state; B: the second requestAnimationFrame after the commit (the committed tree is mounted in the frame of the first); C Android: withFrameNanos after the composition (SideEffect / LaunchedEffect); C iOS: CADisplayLink after the SwiftUI update). G1MARK app.ready / app.resume.ready: the first frame callback after READY / the foreground return (A: scheduleFrameCallback; B: requestAnimationFrame; C Android: Choreographer.postFrameCallback; C iOS: CADisplayLink)"
   },
   "markers": {
     "format": "G1MARK v=1 app=<A|B|C> seq=<n> name=<name> t=<native ns> rt=<runtime ns | -> [key=value ...]  (keys and values encoded like java.net.URLEncoder UTF-8; no user-entered text, no payloads, only ids, codes, enums and numbers)",
@@ -596,8 +597,8 @@
     "search_route": {
       "command": "bench.search-route",
       "order": "500 queries of query_corpus.json in file order, then the 30 cases of route_cases.json in file order, one process, no restart",
-      "search_path": "the query text is placed in the search field state and the same submit handler as home.search.submit runs; compute_ns = duration of the G1-SEARCH-1.0 call alone; e2e_ns = submit handler entry -> first frame callback after the result state is applied (A: SchedulerBinding.addPostFrameCallback; B: requestAnimationFrame scheduled from a layout effect after commit; C Android: withFrameNanos after recomposition; C iOS: CADisplayLink after the SwiftUI update)",
-      "route_path": "origin, destination, step_free and the case blocked edges are set on the route screen state and the same handler as route.compute runs; compute_ns = G1-ROUTE-1.0 plus G1-ROUTE-STEPS-1.0; e2e_ns = handler entry -> first frame callback after the steps (or the rejection) are applied",
+      "search_path": "the query text is placed in the search field state and shown (one frame), the loop yields to an idle point (no timed handler starts inside a frame callback: A zero-duration timer, B setTimeout 0, C Android Handler.post on the main looper, C iOS DispatchQueue.main.async) and the same submit handler as home.search.submit runs; compute_ns = duration of the G1-SEARCH-1.0 call alone; e2e_ns = submit handler entry -> the first frame callback after the frame that applied the result state (frame rule, ready_predicate.frame_rule)",
+      "route_path": "origin, destination, step_free and the case blocked edges are set on the route screen state and shown (one frame), the loop yields to an idle point and the same handler as route.compute runs; compute_ns = G1-ROUTE-1.0 plus G1-ROUTE-STEPS-1.0; e2e_ns = handler entry -> the first frame callback after the frame that applied the steps (or the rejection) (frame rule)",
       "result": "out/<run_id>.json {contract: \"G1-BENCH-SR-1.0\", run_id, kind, app, bundle_version, start_ns, end_ns, search: [{id, outcome, ids, compute_ns, e2e_ns}], route: [{id, outcome, nodes?, length_mm?, steps?, summary?, compute_ns, e2e_ns}]}; G1MARK run.start / run.done"
     },
     "bridge": {
