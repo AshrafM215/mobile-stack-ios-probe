@@ -1,7 +1,7 @@
 // Candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Screens S01-S09 of G1-CIC-1.0 plus the anchor-code result and data/trust screens. Every contract id is a testID
 // (resource-id on Android, accessibilityIdentifier on iOS).
-import React, { createContext, useContext, useLayoutEffect } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useMemo } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -101,6 +101,9 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
   }, [enabled, state]);
   const results = state.results;
   const data = state.data;
+  // the field's initial text changes only with a programmatic change (queryEpoch), never while the user types
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fieldInitialText = useMemo(() => state.query, [state.queryEpoch]);
   return (
     <View
       style={ui.fill}
@@ -122,8 +125,10 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
       </T>
       <View style={ui.row}>
         {/* Uncontrolled while typing: the native field owns the text and reports every change; a programmatic change
-            (clear, lab query) bumps queryEpoch and remounts the field with the new text. A controlled value lags the
-            native text under fast input and overwrites it (characters lost), as the first iOS end-to-end probe showed. */}
+            (clear, lab query) bumps queryEpoch and remounts the field with the new text. React Native passes value or
+            defaultValue to the native view as its text on every render, so a value or defaultValue that follows the
+            typed text lags it under fast input and overwrites it (characters lost, as the iOS end-to-end probes showed):
+            the initial text is therefore fixed per epoch. */}
         <TextInput
           key={state.queryEpoch}
           testID="home.search.field"
@@ -131,7 +136,7 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
           placeholder={s.t('home.search.hint')}
           placeholderTextColor={C.muted}
           editable={enabled}
-          defaultValue={state.query}
+          defaultValue={fieldInitialText}
           onChangeText={(v) => state.setQuery(v)}
           onSubmitEditing={() => state.submitSearch()}
           returnKeyType="search"

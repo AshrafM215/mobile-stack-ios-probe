@@ -20,6 +20,14 @@ final class FlowTests: XCTestCase {
 
     private func el(_ a: XCUIApplication, _ id: String) -> XCUIElement { a.descendants(matching: .any)[id].firstMatch }
 
+    /// Records that a flow state was reached (the element tree of the state is in the log). No screenshot on the
+    /// passing path: a hosted simulator under load can time out a screenshot request, which XCTest records as a test
+    /// failure unrelated to the candidate (probe v1-h, candidate A); the simctl READY screenshot is the visual record.
+    private func record(_ a: XCUIApplication, _ name: String) {
+        print("G1_E2E state=\(name)")
+    }
+
+    /// Failure diagnostics only: a screenshot attachment (its own timeout cannot hide the recorded failure).
     private func attach(_ a: XCUIApplication, _ name: String) {
         let shot = XCTAttachment(screenshot: a.screenshot())
         shot.name = name
@@ -63,29 +71,29 @@ final class FlowTests: XCTestCase {
 
     func test1SearchDetailsRouteAndArFallback() throws {
         let a = launchReady()
-        attach(a, "ready")
+        record(a, "ready")
         let field = el(a, "home.search.field")
         field.tap()
         field.typeText("SB1-F1-R001")
         el(a, "home.search.submit").tap()
         check(a, el(a, "home.result.D001").waitForExistence(timeout: 30), "unique result D001")
         check(a, el(a, "home.results.status").exists, "results status")
-        attach(a, "results")
+        record(a, "results")
         el(a, "home.result.D001").tap()
         check(a, el(a, "details.code").waitForExistence(timeout: 30), "details")
         check(a, waitFor(el(a, "details.code"), "label == 'SB1-F1-R001'", timeout: 10), "details.code value")
         check(a, scrollTo(a, "details.schedule.item.SYN-COURSE-001").exists, "schedule item")
-        attach(a, "details")
+        record(a, "details")
         scrollTo(a, "details.route").tap()
         check(a, el(a, "route.compute").waitForExistence(timeout: 30), "route screen")
         el(a, "route.compute").tap()
         check(a, scrollTo(a, "route.summary").waitForExistence(timeout: 30), "route summary")
         check(a, scrollTo(a, "route.step.0").exists, "first step")
-        attach(a, "route")
+        record(a, "route")
         scrollTo(a, "route.ar").tap()
         check(a, el(a, "fallback.title").waitForExistence(timeout: 30), "text fallback (no ARKit world tracking on the simulator)")
         check(a, el(a, "fallback.message").exists, "fallback message")
-        attach(a, "fallback")
+        record(a, "fallback")
         scrollTo(a, "fallback.back").tap()
         check(a, el(a, "route.back").waitForExistence(timeout: 20), "back to route")
         el(a, "route.back").tap()
@@ -97,7 +105,7 @@ final class FlowTests: XCTestCase {
         el(a, "home.lang").tap()
         check(a, waitFor(el(a, "home.title"), "label != '\(before)'", timeout: 20), "title language changed")
         check(a, el(a, "home.result.D001").exists, "results kept after the language switch")
-        attach(a, "language-switched")
+        record(a, "language-switched")
         el(a, "home.lang").tap()
         check(a, waitFor(el(a, "home.title"), "label == '\(before)'", timeout: 20), "title language restored")
     }
@@ -105,7 +113,7 @@ final class FlowTests: XCTestCase {
     func test2LargestAccessibilityTextSize() throws {
         let a = launchReady(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         check(a, el(a, "home.search.submit").exists, "search button at the largest text size")
-        attach(a, "largest-text")
+        record(a, "largest-text")
     }
 
     func test3AccessibilityAuditIsRecorded() throws {
@@ -129,7 +137,7 @@ final class FlowTests: XCTestCase {
         a.open(URL(string: "\(scheme)://cmd?name=qr.inject&args=\(args)")!)
         check(a, el(a, "qr.result").waitForExistence(timeout: 30), "anchor-code result screen")
         check(a, !el(a, "qr.result").label.contains("["), "result text resolved")
-        attach(a, "qr-result")
+        record(a, "qr-result")
         el(a, "qr.close").tap()
         check(a, el(a, "home.search.field").waitForExistence(timeout: 20), "back home")
     }
