@@ -17,6 +17,7 @@ final class LaunchUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["arStatus"].label.contains("unsupported"))
     }
 
+    @available(iOS 17.0, *)
     func testAccessibilityAuditIsRecorded() throws {
         let app = XCUIApplication()
         app.launch()
