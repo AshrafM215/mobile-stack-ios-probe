@@ -121,13 +121,17 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
         {trustText(s, state.bundleInfo)}
       </T>
       <View style={ui.row}>
+        {/* Uncontrolled while typing: the native field owns the text and reports every change; a programmatic change
+            (clear, lab query) bumps queryEpoch and remounts the field with the new text. A controlled value lags the
+            native text under fast input and overwrites it (characters lost), as the first iOS end-to-end probe showed. */}
         <TextInput
+          key={state.queryEpoch}
           testID="home.search.field"
           accessibilityLabel={s.t('home.search.label')}
           placeholder={s.t('home.search.hint')}
           placeholderTextColor={C.muted}
           editable={enabled}
-          value={state.query}
+          defaultValue={state.query}
           onChangeText={(v) => state.setQuery(v)}
           onSubmitEditing={() => state.submitSearch()}
           returnKeyType="search"

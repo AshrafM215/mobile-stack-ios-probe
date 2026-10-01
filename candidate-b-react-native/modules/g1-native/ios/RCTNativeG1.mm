@@ -25,6 +25,7 @@ static const NSUInteger kMaxBundleB64 = (64 * 1024 * 1024 + 2) / 3 * 4;
 
 @implementation RCTNativeG1 {
   BOOL _launchConsumed;
+  BOOL _observingLabUrls;
 }
 
 RCT_EXPORT_MODULE(NativeG1)
@@ -38,12 +39,23 @@ RCT_EXPORT_MODULE(NativeG1)
 {
   if (self = [super init]) {
     [G1NativeBridge initializeWithAppId:@"B"];
+  }
+  return self;
+}
+
+// Only the instance connected to the JavaScript runtime (event emitter callback set) observes lab URLs. Emitting
+// through an instance without the callback aborts the process (std::bad_function_call in the generated emitter), which
+// is what the first iOS probe of qr.inject over the lab URL showed.
+- (void)setEventEmitterCallback:(EventEmitterCallbackWrapper *)eventEmitterCallbackWrapper
+{
+  [super setEventEmitterCallback:eventEmitterCallbackWrapper];
+  if (!_observingLabUrls && _eventEmitterCallback) {
+    _observingLabUrls = YES;
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(onLabUrl:)
                                                  name:G1LabCommandURLNotification
                                                object:nil];
   }
-  return self;
 }
 
 - (void)dealloc
@@ -54,7 +66,7 @@ RCT_EXPORT_MODULE(NativeG1)
 - (void)onLabUrl:(NSNotification *)notification
 {
   NSURL *url = notification.object;
-  if (![url isKindOfClass:[NSURL class]]) {
+  if (![url isKindOfClass:[NSURL class]] || !_eventEmitterCallback) {
     return;
   }
   NSArray<NSString *> *cmd = [G1NativeBridge urlCommand:url];

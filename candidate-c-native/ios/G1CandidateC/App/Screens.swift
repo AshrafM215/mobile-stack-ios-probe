@@ -98,7 +98,7 @@ struct HomeScreen: View {
     var body: some View {
         let s = state.s
         let enabled = state.trusted && state.index != nil
-        VStack(alignment: .leading, spacing: 4) {
+        WeightedColumn(spacing: 4) {
             HStack(spacing: 6) {
                 Text(s.t("app.title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader).accessibilityIdentifier("home.title")
                 Spacer()
@@ -109,7 +109,9 @@ struct HomeScreen: View {
             }
             .padding(.horizontal, 12)
             Text(s.t("app.subtitle")).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(trustText(s, state.bundleInfo)).padding(.horizontal, 16).accessibilityIdentifier("home.trust")
+                .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
                 TextField(s.t("home.search.hint"), text: $state.query)
                     .textFieldStyle(.roundedBorder)
@@ -127,9 +129,9 @@ struct HomeScreen: View {
                     .buttonStyle(.borderedProminent).frame(minHeight: 48).disabled(!enabled).accessibilityIdentifier("home.search.submit")
             }
             .padding(.horizontal, 16)
-            Group {
+            // weight 2 of the free height (Compose weight(2f) / Flutter flex: 2); one subview in either state
+            VStack(alignment: .leading, spacing: 0) {
                 if let results = state.results {
-                    VStack(alignment: .leading, spacing: 0) {
                         Text(resultStatus(s, results.outcome, results.ids.count, state.query)).padding(.horizontal, 16).padding(.vertical, 6)
                             .accessibilityIdentifier("home.results.status")
                         ScrollView {
@@ -154,14 +156,13 @@ struct HomeScreen: View {
                         // a container element: an identifier on a plain container would be applied to its children too
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("home.results.list")
-                    }
                 } else {
                     Text(s.t("home.empty")).padding(16).accessibilityIdentifier("home.empty")
                     Spacer(minLength: 0)
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .top)
-            .layoutPriority(2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .layoutWeight(2) // last modifier: the column reads it from this subview
             HStack(spacing: 8) {
                 Text(s.t("home.floor.label"))
                 ForEach(1...3, id: \.self) { f in
@@ -175,12 +176,14 @@ struct HomeScreen: View {
                 }
             }
             .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // weight 3 of the free height (Compose weight(3f) / Flutter flex: 3)
             MapPanel(controller: map)
-                .frame(maxWidth: .infinity, minHeight: 160, maxHeight: .infinity)
-                .layoutPriority(3)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(s.t("home.map.label", ["floor": state.floor]))
                 .accessibilityIdentifier("home.map")
+                .layoutWeight(3) // last modifier: the column reads it from this subview
         }
         .task(id: enabled) {
             if enabled { NextFrame.run { _ in state.homeShown() } }
@@ -373,5 +376,47 @@ struct SettingsScreen: View {
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------- layout
+
+/// Column that gives the height left by its fixed children to the weighted ones in proportion to their weights (the
+/// semantics of Compose Modifier.weight and Flutter Expanded(flex:)), so that A, B and C split the home screen alike.
+/// Every child is proposed the full width; children align their own content (frame alignment follows the layout
+/// direction, so RTL is unaffected).
+struct WeightedColumn: Layout {
+    var spacing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let unconstrained = ProposedViewSize(width: bounds.width, height: nil)
+        let weights = subviews.map { $0[LayoutWeight.self] }
+        var fixed = spacing * CGFloat(max(subviews.count - 1, 0))
+        for (index, subview) in subviews.enumerated() where weights[index] == 0 {
+            fixed += subview.sizeThatFits(unconstrained).height
+        }
+        let total = weights.reduce(0, +)
+        let free = max(bounds.height - fixed, 0)
+        var y = bounds.minY
+        for (index, subview) in subviews.enumerated() {
+            let height = weights[index] > 0 ? (total > 0 ? free * weights[index] / total : 0) : subview.sizeThatFits(unconstrained).height
+            subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: height))
+            y += height + spacing
+        }
+    }
+}
+
+private struct LayoutWeight: LayoutValueKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension View {
+    /// Share of the free height in a WeightedColumn (0 = fixed child at its ideal height).
+    func layoutWeight(_ weight: CGFloat) -> some View {
+        layoutValue(key: LayoutWeight.self, value: weight)
     }
 }
