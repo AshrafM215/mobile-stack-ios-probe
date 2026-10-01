@@ -1,0 +1,50 @@
+# Shared end-to-end UI flow for the three iOS candidates - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+# XcodeGen 2.46.0 project definition (generated in CI, not tracked). The UI test bundle drives an installed candidate app by
+# bundle identifier (TEST_RUNNER_G1_BUNDLE_ID); the host app exists only because a UI test bundle needs a target app.
+name: G1E2E
+options:
+  bundleIdPrefix: com.example.g1bench
+  deploymentTarget:
+    iOS: "17.0" # runner only (XCUIApplication.open, performAccessibilityAudit); the candidate apps target iOS 16.0
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  G1E2EHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: G1E2EHost
+    info:
+      path: G1E2EHost/Info.plist
+      properties:
+        CFBundleDisplayName: "G1 E2E host"
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.g1bench.e2ehost
+  G1E2ETests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: G1E2ETests
+    dependencies:
+      - target: G1E2EHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.g1bench.e2etests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: G1E2EHost
+schemes:
+  G1E2E:
+    build:
+      targets:
+        G1E2EHost: all
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - G1E2ETests

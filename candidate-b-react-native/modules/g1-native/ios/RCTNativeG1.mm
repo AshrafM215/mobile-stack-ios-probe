@@ -5,6 +5,12 @@
 // arguments cannot be checked on iOS: the invocation receives the raw converted value.
 #import "RCTNativeG1.h"
 
+// The generated Swift header names ARKit, AVFoundation and CoreMedia types; its own "@import" lines are skipped in
+// Objective-C++ (no C++ modules), so the frameworks are imported explicitly before it.
+#import <ARKit/ARKit.h>
+#import <AVFoundation/AVFoundation.h>
+#import <CoreMedia/CoreMedia.h>
+
 #if __has_include(<G1NativeCommon/G1NativeCommon-Swift.h>)
 #import <G1NativeCommon/G1NativeCommon-Swift.h>
 #else

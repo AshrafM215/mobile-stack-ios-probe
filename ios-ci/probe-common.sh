@@ -57,48 +57,77 @@ PY
   echo "$udid"
 }
 
-launch_and_capture() {
-  local udid="$1" app="$2" bundle="$3" candidate="$4"
-  xcrun simctl install "$udid" "$app"
-  xcrun simctl launch "$udid" "$bundle" | tee "$EVIDENCE_DIR/$candidate-launch.txt"
-  sleep 30
-  xcrun simctl io "$udid" screenshot "$EVIDENCE_DIR/$candidate-launch.png"
-  xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'eventMessage CONTAINS "G1_PROBE"' \
-    > "$EVIDENCE_DIR/$candidate-probe-log.txt" || true
-  xcrun simctl spawn "$udid" launchctl list > "$EVIDENCE_DIR/$candidate-launchctl.txt" || true
-  if grep -q "UIKitApplication:$bundle" "$EVIDENCE_DIR/$candidate-launchctl.txt"; then
-    echo "process_running=true" | tee -a "$EVIDENCE_DIR/$candidate-launch.txt"
-  else
-    echo "process_running=false" | tee -a "$EVIDENCE_DIR/$candidate-launch.txt"
-    return 4
-  fi
-  if ! grep -q "event=launch" "$EVIDENCE_DIR/$candidate-probe-log.txt"; then
-    echo "launch marker missing" >&2
-    return 5
-  fi
-}
-
-# Full candidate apps: install, launch, wait for the READY marker (G1MARK app.ready in the unified log, subsystem
-# com.example.g1bench), then capture a screenshot and the markers.
+# Full candidate apps: install, start a live unified-log stream (subsystem com.example.g1bench), launch with the app's
+# standard output/error captured (lab builds write every G1MARK line to standard error as well), wait for the READY
+# marker (name=app.ready) in either capture, then record a screenshot, the markers from every source and, when READY is
+# missing, the process log for diagnosis.
 launch_and_wait_ready() {
-  local udid="$1" app="$2" bundle="$3" candidate="$4" i
+  local udid="$1" app="$2" bundle="$3" candidate="$4" i found="" exe stream_pid f
+  exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
   xcrun simctl install "$udid" "$app"
-  xcrun simctl launch "$udid" "$bundle" | tee "$EVIDENCE_DIR/$candidate-launch.txt"
-  for i in $(seq 1 45); do
-    sleep 4
-    xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'subsystem == "com.example.g1bench"' \
-      > "$EVIDENCE_DIR/$candidate-markers.txt" 2>/dev/null || true
-    if grep -q "name=app.ready" "$EVIDENCE_DIR/$candidate-markers.txt"; then break; fi
+  xcrun simctl spawn "$udid" log stream --style compact --level info --predicate 'subsystem == "com.example.g1bench"' \
+    > "$EVIDENCE_DIR/$candidate-markers-stream.txt" 2>&1 &
+  stream_pid=$!
+  sleep 3
+  xcrun simctl launch --stdout="$EVIDENCE_DIR/$candidate-app-stdout.txt" --stderr="$EVIDENCE_DIR/$candidate-app-stderr.txt" \
+    "$udid" "$bundle" | tee "$EVIDENCE_DIR/$candidate-launch.txt"
+  for i in $(seq 1 60); do
+    sleep 3
+    if grep -q "name=app.ready" "$EVIDENCE_DIR/$candidate-app-stderr.txt" 2>/dev/null; then found=stderr; break; fi
+    if grep -q "name=app.ready" "$EVIDENCE_DIR/$candidate-markers-stream.txt" 2>/dev/null; then found=log-stream; break; fi
   done
   sleep 5
   xcrun simctl io "$udid" screenshot "$EVIDENCE_DIR/$candidate-ready.png"
-  xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'subsystem == "com.example.g1bench"' \
-    > "$EVIDENCE_DIR/$candidate-markers.txt" || true
-  if ! grep -q "name=app.ready" "$EVIDENCE_DIR/$candidate-markers.txt"; then
+  kill "$stream_pid" 2>/dev/null || true
+  wait "$stream_pid" 2>/dev/null || true
+  xcrun simctl spawn "$udid" log show --last 10m --style compact --predicate 'subsystem == "com.example.g1bench"' \
+    > "$EVIDENCE_DIR/$candidate-markers-logshow.txt" 2>&1 || true
+  {
+    echo "ready_source=${found:-none}"
+    for f in app-stderr markers-stream markers-logshow; do
+      echo "$f G1MARK_lines=$(grep -c 'G1MARK v=1' "$EVIDENCE_DIR/$candidate-$f.txt" 2>/dev/null || true)"
+    done
+  } | tee "$EVIDENCE_DIR/$candidate-marker-sources.txt"
+  if [ -z "$found" ]; then
+    xcrun simctl spawn "$udid" log show --last 15m --style compact --info --debug --predicate "process == \"$exe\"" \
+      > "$EVIDENCE_DIR/$candidate-diag-process-log.txt" 2>&1 || true
+    xcrun simctl spawn "$udid" launchctl list > "$EVIDENCE_DIR/$candidate-diag-launchctl.txt" 2>&1 || true
     echo "READY marker missing" >&2
     return 6
   fi
-  grep -o "G1MARK v=1 .*" "$EVIDENCE_DIR/$candidate-markers.txt" | sed 's/ t=[0-9]* / /' > "$EVIDENCE_DIR/$candidate-markers-normalized.txt" || true
+  # run-independent view of the marker sequence (native and runtime clock values removed)
+  grep -ho "G1MARK v=1 .*" "$EVIDENCE_DIR/$candidate-app-stderr.txt" | sed -E 's/ t=[0-9]+ rt=[^ ]+//' \
+    > "$EVIDENCE_DIR/$candidate-markers-normalized.txt" || true
+}
+
+XCODEGEN_URL=https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+XCODEGEN_SHA256=4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+PROBE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Pinned XcodeGen (checksum verified); sets XG.
+fetch_xcodegen() {
+  if [ -n "${XG:-}" ] && [ -x "$XG" ]; then return; fi
+  curl -fsSL --retry 3 -o "$RUNNER_TEMP/xcodegen.zip" "$XCODEGEN_URL"
+  echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+  rm -rf "$RUNNER_TEMP/xcodegen"
+  unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+  XG="$RUNNER_TEMP/xcodegen/xcodegen/bin/xcodegen"
+  "$XG" --version > "$EVIDENCE_DIR/xcodegen-version.txt"
+}
+
+# Shared end-to-end UI flow (ios-ci/e2e) against the installed candidate app; the injected QR image is placed in the app's
+# lab import folder first (lab hook qr.inject through the candidate's URL scheme).
+run_e2e() {
+  local udid="$1" bundle="$2" scheme="$3" candidate="$4" data
+  fetch_xcodegen
+  data=$(xcrun simctl get_app_container "$udid" "$bundle" data)
+  mkdir -p "$data/Documents/g1/import"
+  cp "$PROBE_ROOT/synthetic-data/out/qr/A01.png" "$data/Documents/g1/import/A01.png"
+  (cd "$PROBE_ROOT/ios-ci/e2e" && "$XG" generate --spec project.yml) > "$EVIDENCE_DIR/$candidate-e2e-xcodegen.txt" 2>&1
+  TEST_RUNNER_G1_BUNDLE_ID="$bundle" TEST_RUNNER_G1_URL_SCHEME="$scheme" \
+    xcodebuild -project "$PROBE_ROOT/ios-ci/e2e/G1E2E.xcodeproj" -scheme G1E2E -destination "id=$udid" \
+    -derivedDataPath "$RUNNER_TEMP/e2e-dd-$candidate" -resultBundlePath "$EVIDENCE_DIR/$candidate-e2e.xcresult" \
+    CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$EVIDENCE_DIR/$candidate-e2e.txt"
 }
 
 hash_tree() {

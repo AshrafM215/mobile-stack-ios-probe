@@ -21,6 +21,7 @@ xcodebuild -workspace ios/G1CandidateB.xcworkspace -scheme G1CandidateB -configu
 APP=ios/build/dd/Build/Products/Release-iphonesimulator/G1CandidateB.app
 hash_tree "$APP" "$C-simulator-app"
 launch_and_wait_ready "$UDID" "$APP" com.example.g1bench.candidateb "$C"
+run_e2e "$UDID" com.example.g1bench.candidateb g1bench-b "$C"
 xcodebuild -workspace ios/G1CandidateB.xcworkspace -scheme G1CandidateB -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' -derivedDataPath ios/build/dd-device CODE_SIGNING_ALLOWED=NO build 2>&1 \
   | tee "$EVIDENCE_DIR/$C-build-iphoneos-unsigned.txt"

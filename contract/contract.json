@@ -280,7 +280,7 @@
     },
     "sink": {
       "android": "logcat tag G1MARK, priority INFO",
-      "ios": "unified log subsystem com.example.g1bench, category G1MARK, level notice (the default level: persisted, read by log show without flags), public"
+      "ios": "unified log subsystem com.example.g1bench, category G1MARK, level notice (the default level: persisted, read by log show without flags), public; lab builds also write the identical line to standard error (simulator harness: simctl launch --stderr)"
     },
     "names": [
       "app.start",

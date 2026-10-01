@@ -71,8 +71,14 @@ public enum G1Trace {
         let text = line(name, runtimeNanos: runtimeNanos, fields, seq: n, t: nowNanos())
         #if canImport(os)
         logger.notice("\(text, privacy: .public)") // default level: persisted, visible to `log show` without flags
-        #else
-        FileHandle.standardError.write(Data((text + "\n").utf8))
         #endif
+        // Lab builds also write the same line to standard error (one write per line, serialized), which the simulator
+        // harness captures with `simctl launch --stderr`; iOS markers are feasibility evidence only (no iOS measurement).
+        if BuildFlags.lab {
+            let bytes = Data((text + "\n").utf8)
+            lock.lock()
+            FileHandle.standardError.write(bytes)
+            lock.unlock()
+        }
     }
 }
