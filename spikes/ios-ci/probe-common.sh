@@ -432,6 +432,13 @@ lock_check() {
     | grep -E '(Package\.resolved|Podfile\.lock|pubspec\.lock|package-lock\.json)$' || true)
   if [ -n "$stray" ]; then
     echo "$stray" | sed 's/^/other-lock-file /' | tee -a "$EVIDENCE_DIR/$name-lock-check.txt"
+    # the files are kept as they are, so that a lock file a tool writes can be compared and tracked
+    local top line path
+    top=$(git -C "$PROBE_ROOT" rev-parse --show-toplevel)
+    while IFS= read -r line; do
+      path="${line:3}"
+      cp "$top/$path" "$EVIDENCE_DIR/$name-lockfile-other-$(echo "$path" | tr '/' '_').copy" 2>/dev/null || true
+    done <<< "$stray"
     rc=5
   fi
   return "$rc"

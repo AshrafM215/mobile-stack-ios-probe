@@ -67,7 +67,8 @@ s_build_device() {
 s_linkage_device() { capture_linkage "$DEVICE_APP" "$C-iphoneos-unsigned-app"; }
 
 s_lock_check() {
-  lock_check "$C" synthetic-data/package-lock.json "$C/pubspec.lock" "$C/ios/Runner.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  lock_check "$C" synthetic-data/package-lock.json "$C/pubspec.lock" "$C/ios/Runner.xcworkspace/xcshareddata/swiftpm/Package.resolved" \
+    "$C/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 }
 
 job_begin "$C" environment resolve configure unit build-simulator linkage-simulator launch e2e build-device linkage-device lock-check
