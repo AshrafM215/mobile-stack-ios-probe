@@ -2,12 +2,15 @@
 
 **NON-PRODUCTION / SYNTHETIC DATA ONLY.** This repository holds small synthetic spike applications used only to
 check that three mobile stacks can be configured, resolved, built, linked and launched for the iOS Simulator on
-standard GitHub-hosted macOS runners:
+standard GitHub-hosted macOS runners. The tree is under `spikes/`:
 
-- `candidate-a-flutter` - Flutter, MapLibre Native through `maplibre_gl`, ARKit through a platform channel;
-- `candidate-b-react-native` - React Native (New Architecture), MapLibre Native through
+- `spikes/candidate-a-flutter` - Flutter, MapLibre Native through `maplibre_gl`, ARKit through a platform channel;
+- `spikes/candidate-b-react-native` - React Native (New Architecture), MapLibre Native through
   `@maplibre/maplibre-react-native`, ARKit through a TurboModule;
-- `candidate-c-native/ios` - Swift/SwiftUI with MapLibre Native iOS and ARKit.
+- `spikes/candidate-c-native/ios` - Swift/SwiftUI with MapLibre Native iOS and ARKit;
+- `spikes/native-common/ios` - the Swift package the three applications share;
+- `spikes/ios-ci` - the job scripts. Each job records its stages (`<job>-stages.ndjson`, `<job>-job.json`) and the
+  runner environment (`<job>-environment.json`) in the uploaded evidence.
 
 All map content is invented synthetic geometry near 0N 0E. There are no real places, people, accounts, credentials,
 signing identities or production endpoints. Workflow results are development evidence only; they are not a

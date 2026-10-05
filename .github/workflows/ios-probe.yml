@@ -35,8 +35,8 @@ jobs:
         with:
           node-version: 24.13.1
           package-manager-cache: false
-      - name: Probe
-        run: bash ios-ci/probe-${{ matrix.candidate }}.sh
+      - name: Job
+        run: bash spikes/ios-ci/probe-${{ matrix.candidate }}.sh
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
