@@ -141,11 +141,21 @@ final class FlowTests: XCTestCase {
         record(a, "largest-text")
     }
 
+    /// Recorded, not asserted: every issue of the platform's accessibility audit of the home screen with what identifies
+    /// its element (audit type, descriptions, identifier, element type, label, frame), and the element tree of the
+    /// audited screen in the log.
     func test3AccessibilityAuditIsRecorded() throws {
         let a = launchReady()
+        print("G1_E2E audit_tree_begin\n\(a.debugDescription)\nG1_E2E audit_tree_end")
         var issues: [String] = []
         try a.performAccessibilityAudit { issue in
-            issues.append("\(issue.auditType.rawValue) \(issue.compactDescription) [\(issue.element?.identifier ?? "-")]")
+            var element = "element=none"
+            if let e = issue.element, e.exists {
+                let f = e.frame
+                element = "id=\(e.identifier) kind=\(e.elementType.rawValue) label=\(e.label) " +
+                    "frame=\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width))x\(Int(f.height))"
+            }
+            issues.append("type=\(issue.auditType.rawValue) \(issue.compactDescription) | \(issue.detailedDescription) | \(element)")
             return true // recorded, not failed: the audit result is evidence for the accessibility criteria
         }
         let report = XCTAttachment(string: "issues=\(issues.count)\n" + issues.joined(separator: "\n"))
