@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        candidate: [candidate-b-react-native]
+        candidate: [native-common, candidate-a-flutter, candidate-b-react-native, candidate-c-native]
     env:
       EVIDENCE_DIR: ${{ github.workspace }}/evidence
     steps:

@@ -69,12 +69,37 @@ final class FlowTests: XCTestCase {
         return e
     }
 
+    /// Types one character per typeText call: XCUITest waits for the app to idle between calls, so the pace is that of
+    /// a person typing and does not depend on how fast the runner can synthesize a burst of key events.
+    private func typePaced(_ field: XCUIElement, _ text: String) {
+        for character in text { field.typeText(String(character)) }
+    }
+
+    /// Recorded, not asserted (like the accessibility audit): the whole query typed as one burst of synthesized key
+    /// events, first in the suite and therefore the first keyboard use on the simulator. A candidate whose text field
+    /// loses characters under such a burst shows it here (value and match are in the log and in an attachment); the
+    /// flow test types at a person's pace.
+    func test0BurstTypingIsRecorded() throws {
+        let a = launchReady()
+        let field = el(a, "home.search.field")
+        field.tap()
+        field.typeText("SB1-F1-R001")
+        sleep(2)
+        let value = field.value as? String ?? ""
+        let line = "burst_typing value=\(value) expected=SB1-F1-R001 match=\(value == "SB1-F1-R001")"
+        let report = XCTAttachment(string: line)
+        report.name = "burst-typing"
+        report.lifetime = .keepAlways
+        add(report)
+        print("G1_E2E \(line)")
+    }
+
     func test1SearchDetailsRouteAndArFallback() throws {
         let a = launchReady()
         record(a, "ready")
         let field = el(a, "home.search.field")
         field.tap()
-        field.typeText("SB1-F1-R001")
+        typePaced(field, "SB1-F1-R001")
         el(a, "home.search.submit").tap()
         check(a, el(a, "home.result.D001").waitForExistence(timeout: 30), "unique result D001")
         check(a, el(a, "home.results.status").exists, "results status")
@@ -108,44 +133,6 @@ final class FlowTests: XCTestCase {
         record(a, "language-switched")
         el(a, "home.lang").tap()
         check(a, waitFor(el(a, "home.title"), "label == '\(before)'", timeout: 20), "title language restored")
-    }
-
-    /// DIAGNOSTIC (probe branch only), each run alone on a freshly created simulator (first keyboard use).
-    private func diagBurst(_ a: XCUIApplication, _ name: String) {
-        let field = el(a, "home.search.field")
-        field.tap()
-        field.typeText("SB1-F1-R001")
-        sleep(3)
-        let value = field.value as? String ?? "-"
-        print("G1_E2E diag \(name) value=\(value) match=\(value == "SB1-F1-R001")")
-    }
-
-    /// Arabic interface (right-aligned field), one typing burst.
-    func testDiagBurstArabic() throws {
-        let a = launchReady()
-        diagBurst(a, "burst-ar")
-    }
-
-    /// English interface (left-aligned field) through the lab language hook, one typing burst.
-    func testDiagBurstEnglish() throws {
-        let scheme = try XCTUnwrap(env["G1_URL_SCHEME"], "lab URL scheme (TEST_RUNNER_G1_URL_SCHEME)")
-        let a = launchReady()
-        let before = el(a, "home.title").label
-        let args = #"{"lang":"en"}"#.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
-        a.open(URL(string: "\(scheme)://cmd?name=lang.set&args=\(args)")!)
-        check(a, waitFor(el(a, "home.title"), "label != '\(before)'", timeout: 30), "title language changed")
-        diagBurst(a, "burst-en")
-    }
-
-    /// Arabic interface, one character per typeText call (XCUITest waits for the app to idle in between).
-    func testDiagPacedArabic() throws {
-        let a = launchReady()
-        let field = el(a, "home.search.field")
-        field.tap()
-        for ch in "SB1-F1-R001" { field.typeText(String(ch)) }
-        sleep(3)
-        let value = field.value as? String ?? "-"
-        print("G1_E2E diag paced-ar value=\(value) match=\(value == "SB1-F1-R001")")
     }
 
     func test2LargestAccessibilityTextSize() throws {

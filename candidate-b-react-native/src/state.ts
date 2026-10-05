@@ -1,7 +1,6 @@
 // Candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Application state and the handlers shared by the UI and the lab hooks (the lab hooks call the same handlers).
 import * as G1 from 'g1-native';
-import { Platform, Settings } from 'react-native';
 
 import { BundleData, type GraphNode } from './core/bundleData';
 import { decodeBase64 } from './core/base64';
@@ -38,18 +37,6 @@ export const lonOf = (xMm: number): number => (xMm * 100) / 11131949079;
 export const latOf = (yMm: number): number => (yMm * 10) / 1105742727;
 
 const INACTIVITY_MS = 30000;
-// DIAGNOSTIC (probe branch only): launch argument -G1DiagQuiet YES disables the store notification of typed text
-let diagQuiet: boolean | null = null;
-function isDiagQuiet(): boolean {
-  if (diagQuiet === null) {
-    try {
-      diagQuiet = Platform.OS === 'ios' && !!Settings.get('G1DiagQuiet');
-    } catch {
-      diagQuiet = false; // no settings module (unit tests)
-    }
-  }
-  return diagQuiet;
-}
 
 /** One GET through React Native's standard networking with the inactivity watchdog of the update transfer policy. */
 function download(url: string, onProgress: (percent: number) => void): Promise<{ status: number; body: Uint8Array | null }> {
@@ -288,9 +275,7 @@ export class AppState {
 
   setQuery = (text: string, fromField = true): void => {
     this.query = text;
-    if (fromField) G1.mark('diag.js', ['len', String(text.length), 'quiet', isDiagQuiet() ? '1' : '0']);
     if (!fromField) this.queryEpoch++;
-    if (fromField && isDiagQuiet()) return;
     this.notify();
   };
 

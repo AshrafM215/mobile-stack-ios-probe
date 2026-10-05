@@ -155,11 +155,11 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
         {trustText(s, state.bundleInfo)}
       </T>
       <View style={ui.row}>
-        {/* Uncontrolled while typing: the native field owns the text and reports every change; a programmatic change
-            (clear, lab query) bumps queryEpoch and remounts the field with the new text. React Native passes value or
-            defaultValue to the native view as its text on every render, so a value or defaultValue that follows the
-            typed text lags it under fast input and overwrites it (characters lost, as the iOS end-to-end probes showed):
-            the initial text is therefore fixed per epoch. */}
+        {/* Uncontrolled while typing: the native field owns the text and reports every change, and the app never writes
+            the typed text back to it; a programmatic change (clear, lab query) bumps queryEpoch and remounts the field
+            with the new text (the initial text is fixed per epoch). This keeps the app out of the field's text while
+            the user types; the framework's own state round trip of a typed character remains (iOS: key events that
+            arrive while React Native re-applies the first typed character are discarded, recorded in the iOS probe). */}
         <TextInput
           key={state.queryEpoch}
           ref={field}
@@ -178,18 +178,7 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
           autoCapitalize="none"
           style={[ui.input, { textAlign: state.s.rtl ? 'right' : 'left' }]}
         />
-        {/* The clear control's slot is always laid out (hidden and inert while the query is empty): the first typed
-            character must not change the row's structure (the slot is never flattened either). Inserting the control at
-            that moment dropped the characters typed meanwhile (iOS end-to-end probe: "SB1-F1-R001" arrived as "SR001"). */}
-        <View
-          collapsable={false}
-          style={state.query.length > 0 ? null : ui.hiddenSlot}
-          pointerEvents={state.query.length > 0 ? 'auto' : 'none'}
-          importantForAccessibility={state.query.length > 0 ? 'auto' : 'no-hide-descendants'}
-          accessibilityElementsHidden={state.query.length === 0}
-        >
-          <Btn id="home.search.clear" label={s.t('home.search.clear')} onPress={state.clearSearch} outline />
-        </View>
+        {state.query.length > 0 ? <Btn id="home.search.clear" label={s.t('home.search.clear')} onPress={state.clearSearch} outline /> : null}
         <Btn
           id="home.search.submit"
           label={seed === 'missing-label' ? '' : s.t('home.search.submit')}
@@ -544,7 +533,6 @@ const ui = StyleSheet.create({
   btnTextFilled: { color: C.onPrimary },
   btnTextOutline: { color: C.primary },
   pressed: { opacity: 0.7 },
-  hiddenSlot: { opacity: 0 },
   // seeded defects (a11y.seed) only
   btnSmall: { minHeight: 0, minWidth: 0, paddingHorizontal: 4, paddingVertical: 0 },
   btnTextSmall: { fontSize: 12 },

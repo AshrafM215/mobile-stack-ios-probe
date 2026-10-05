@@ -40,7 +40,7 @@ export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
   const map = useRef<MapRef>(null);
 
   useEffect(() => {
-    state.camera = {
+    const port: NonNullable<AppState['camera']> = {
       easeTo: (lon, lat, zoom, durationMs) => camera.current?.easeTo({ center: [lon, lat], zoom, duration: durationMs }),
       inspect: async () => {
         const m = map.current;
@@ -85,8 +85,11 @@ export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
         return out;
       },
     };
+    state.camera = port;
+    // During an activity recreation two map panels can be alive for a moment, and the leaving panel's cleanup may run
+    // after the entering panel registered its port: a panel clears only the port it registered itself.
     return () => {
-      state.camera = null;
+      if (state.camera === port) state.camera = null;
     };
   }, [state]);
 
