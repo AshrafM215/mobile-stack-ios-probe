@@ -2,12 +2,15 @@
 # Standard GitHub-hosted macOS runners only. One run executes the job scripts of spikes/ios-ci for the shared native
 # module and the three candidates. The evidence of a job is the artifact it uploads, judged by the records inside it;
 # a green job page alone is not evidence. A push that changes the spike tree or this file runs every job on the pushed
-# revision. A dispatched run can name the jobs, a derived tree (built by the scripts of the dispatched revision), the
-# resolution mode and a registered overlay.
+# revision; a push of a task tree (a branch below g1-task/) runs nothing, because such a tree is built only by the run
+# that is dispatched for it. A dispatched run can name the jobs, a derived tree (built by the scripts of the dispatched
+# revision), the resolution mode and a registered overlay.
 name: G1 iOS feasibility
 
 on:
   push:
+    branches-ignore:
+      - 'g1-task/**'
     paths:
       - 'spikes/**'
       - '.github/workflows/g1-ios-feasibility.yml'
