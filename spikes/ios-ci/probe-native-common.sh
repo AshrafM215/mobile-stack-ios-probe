@@ -15,7 +15,7 @@ s_environment() {
   select_xcode
   capture_env "$N"
   prepare_simulator G1Probe-N
-  bash "$PROBE_ROOT/ios-ci/prepare-data.sh"
+  prepare_data
   cd "$PROBE_ROOT/native-common/ios"
   xcodebuild -list 2>&1 | tee "$EVIDENCE_DIR/$N-schemes.txt"
 }

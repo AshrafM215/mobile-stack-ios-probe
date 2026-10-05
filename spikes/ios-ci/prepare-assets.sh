@@ -3,7 +3,7 @@
 # Copies the embedded synthetic bundle and the lab trust store into the G1NativeCommon resource folder after checking
 # their SHA-256 against synthetic-data/out/GENERATION_RECORD.json (same rule as the Android G1AssetsTask).
 set -euo pipefail
-here="$(cd "$(dirname "$0")/.." && pwd)"
+here="${G1_TREE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 out="$here/synthetic-data/out"
 dest="$here/native-common/ios/Sources/G1NativeCommon/Resources/g1"
 mkdir -p "$dest"

@@ -1,0 +1,2 @@
+Overlay self-test file - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+Written into a derived tree by the overlay self-test of the iOS job; nothing reads it.

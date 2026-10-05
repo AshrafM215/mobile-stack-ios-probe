@@ -1,0 +1,16 @@
+{
+ "classification": "NON-PRODUCTION / SYNTHETIC DATA ONLY",
+ "note": "The Flutter SDK of this tree's tuple: the archive each host path fetches or checks, by URL and SHA-256. A tree that is upgraded to another tuple names its own archives here.",
+ "flutter_sdk": {
+  "version": "3.47.5",
+  "channel": "stable",
+  "macos_arm64": {
+   "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.5-stable.zip",
+   "sha256": "d4dd908b5f8f65515831b6d68ae33307a813f2b68947dded7a1994ee5ea7cead"
+  },
+  "windows_x64": {
+   "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.47.5-stable.zip",
+   "sha256": "0ccd71931f49c2fbe394b1eeb6d79af3d624058a043ea0d03d34160581624fb8"
+  }
+ }
+}

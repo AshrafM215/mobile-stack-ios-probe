@@ -1,0 +1,83 @@
+# G1 iOS feasibility jobs - NON-PRODUCTION / SYNTHETIC DATA ONLY.
+# Standard GitHub-hosted macOS runners only. One run executes the job scripts of spikes/ios-ci for the shared native
+# module and the three candidates. The evidence of a job is the artifact it uploads, judged by the records inside it;
+# a green job page alone is not evidence. A push that changes the spike tree or this file runs every job on the pushed
+# revision. A dispatched run can name the jobs, a derived tree (built by the scripts of the dispatched revision), the
+# resolution mode and a registered overlay.
+name: G1 iOS feasibility
+
+on:
+  push:
+    paths:
+      - 'spikes/**'
+      - '.github/workflows/g1-ios-feasibility.yml'
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'JSON array of the jobs to run'
+        required: false
+        default: '["native-common","candidate-a-flutter","candidate-b-react-native","candidate-c-native"]'
+      tree_ref:
+        description: 'Git ref of a derived tree whose spikes/ directory is built (empty: the dispatched revision)'
+        required: false
+        default: ''
+      resolution:
+        description: 'locked: the tracked lock files decide; update: resolution may write the lock files'
+        required: false
+        default: 'locked'
+      overlay:
+        description: 'Name of a registered overlay applied to the derived tree before the job (empty: none)'
+        required: false
+        default: ''
+      purpose:
+        description: 'Label recorded with the job (the execution unit or task the run serves)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: ${{ matrix.job }}
+    runs-on: macos-26
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        job: ${{ fromJSON(inputs.jobs || '["native-common","candidate-a-flutter","candidate-b-react-native","candidate-c-native"]') }}
+    env:
+      EVIDENCE_DIR: ${{ github.workspace }}/evidence
+      G1_JOB: ${{ matrix.job }}
+      G1_TREE_REF: ${{ inputs.tree_ref }}
+      G1_RESOLUTION: ${{ inputs.resolution || 'locked' }}
+      G1_OVERLAY: ${{ inputs.overlay }}
+      G1_PURPOSE: ${{ inputs.purpose }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout derived tree
+        if: ${{ inputs.tree_ref }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tree_ref }}
+          path: _tree
+          persist-credentials: false
+      - name: Set up Node 24.13.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.13.1
+          package-manager-cache: false
+      - name: Job
+        run: bash spikes/ios-ci/run-job.sh "$G1_JOB"
+        shell: bash
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ matrix.job }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30

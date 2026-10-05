@@ -1,0 +1,12 @@
+{
+ "schema": "G1-OVERLAY-1.0",
+ "classification": "NON-PRODUCTION / SYNTHETIC DATA ONLY",
+ "name": "selftest",
+ "purpose": "Exercises the overlay mechanism of the iOS job on a derived tree: one file that nothing reads.",
+ "files": [
+  {
+   "path": "synthetic-data/overlay-selftest.txt",
+   "sha256": "2747c3509a64232b7d6e835969bfd3306f07379316f58f29aed4c9eeb7f6d855"
+  }
+ ]
+}

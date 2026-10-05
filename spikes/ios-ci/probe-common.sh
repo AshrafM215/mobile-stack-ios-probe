@@ -13,8 +13,15 @@ set -euo pipefail
 : "${EVIDENCE_DIR:=$PWD/evidence}"
 : "${RUNNER_TEMP:=${TMPDIR:-/tmp}}"
 mkdir -p "$EVIDENCE_DIR"
-PROBE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-JOB_SCHEMA="G1-IOS-JOB-1.1"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The tree whose candidates are built: the tree of these scripts or, for the verification of a derived tree, the tree the
+# caller names (run-job.sh). The scripts, the shared UI flow and the overlays are always the ones beside this file.
+PROBE_ROOT="${G1_TREE_ROOT:-$(cd "$SCRIPTS_DIR/.." && pwd)}"
+# locked: every dependency resolves to the tracked lock files and a lock file that changes fails the job.
+# update: resolution may write the lock files (the feedback run of an upgrade); the lock files are kept as evidence.
+: "${G1_RESOLUTION:=locked}"
+case "$G1_RESOLUTION" in locked|update) ;; *) echo "G1_RESOLUTION must be locked or update" >&2; exit 64 ;; esac
+JOB_SCHEMA="G1-IOS-JOB-1.2"
 # the Swift packages of every xcodebuild call of a job are cloned here once
 SPM_DIR="$RUNNER_TEMP/g1-swift-packages"
 UDID_FILE="$RUNNER_TEMP/g1-simulator-udid"
@@ -150,10 +157,11 @@ capture_env() {
   } > "$EVIDENCE_DIR/$candidate-environment.txt" 2>&1
   xcrun simctl list runtimes -j > "$EVIDENCE_DIR/$candidate-simulator-runtimes.json"
   xcrun simctl list devicetypes -j > "$EVIDENCE_DIR/$candidate-simulator-devicetypes.json"
-  python3 - "$EVIDENCE_DIR" "$candidate" "$XCODE_APP" "$SIM_DEVICE_TYPE" "$SIM_RUNTIME" "$PROBE_ROOT" <<'PY'
+  python3 - "$EVIDENCE_DIR" "$candidate" "$XCODE_APP" "$SIM_DEVICE_TYPE" "$SIM_RUNTIME" "$SCRIPTS_DIR" "$PROBE_ROOT" <<'PY'
 import hashlib, json, os, pathlib, subprocess, sys
-evidence, candidate, xcode_app, device_type, runtime_id, root = sys.argv[1:7]
+evidence, candidate, xcode_app, device_type, runtime_id, scripts_dir, tree_root = sys.argv[1:8]
 evidence = pathlib.Path(evidence)
+root = pathlib.Path(scripts_dir).parent
 
 def out(*argv):
     try:
@@ -191,8 +199,18 @@ for p in sorted(pathlib.Path(root, 'ios-ci').rglob('*')):
     if p.is_file():
         scripts.append('%s %s' % (p.relative_to(root).as_posix(), hashlib.sha256(p.read_bytes()).hexdigest()))
 first = lambda text: text.splitlines()[0].strip() if text else None
+# the workflow file of the run (GITHUB_WORKFLOW_REF: <repository>/<path>@<ref>), read from the checkout of the run
+repository = os.environ.get('GITHUB_REPOSITORY') or ''
+workflow_ref = (os.environ.get('GITHUB_WORKFLOW_REF') or '').split('@')[0]
+workflow_path = workflow_ref[len(repository) + 1:] if repository and workflow_ref.startswith(repository + '/') else None
+workspace = os.environ.get('GITHUB_WORKSPACE')
+derived = os.path.realpath(tree_root) != os.path.realpath(root)
 record = {
-    'schema': 'G1-IOS-ENVIRONMENT-1.0', 'classification': 'NON-PRODUCTION / SYNTHETIC DATA ONLY', 'job': candidate,
+    'schema': 'G1-IOS-ENVIRONMENT-1.1', 'classification': 'NON-PRODUCTION / SYNTHETIC DATA ONLY', 'job': candidate,
+    'workflow': {'path': workflow_path, 'sha256': sha(pathlib.Path(workspace, workflow_path)) if workspace and workflow_path else None},
+    'inputs': {'tree_ref': os.environ.get('G1_TREE_REF') or None, 'resolution': os.environ.get('G1_RESOLUTION') or 'locked',
+               'overlay': os.environ.get('G1_OVERLAY') or None, 'purpose': os.environ.get('G1_PURPOSE') or None},
+    'tree': {'derived': derived, 'commit': out('git', '-C', tree_root, 'rev-parse', 'HEAD')},
     'runner': {'image_os': os.environ.get('ImageOS'), 'image_version': os.environ.get('ImageVersion'), 'runner_os': os.environ.get('RUNNER_OS'),
                'runner_arch': os.environ.get('RUNNER_ARCH'), 'runner_environment': os.environ.get('RUNNER_ENVIRONMENT')},
     'os': {'product_name': out('sw_vers', '-productName'), 'product_version': out('sw_vers', '-productVersion'),
@@ -338,13 +356,13 @@ run_e2e() {
   data=$(xcrun simctl get_app_container "$udid" "$bundle" data)
   mkdir -p "$data/Documents/g1/import"
   cp "$PROBE_ROOT/synthetic-data/out/qr/A01.png" "$data/Documents/g1/import/A01.png"
-  (cd "$PROBE_ROOT/ios-ci/e2e" && "$XCODEGEN_BIN" generate --spec project.yml) > "$EVIDENCE_DIR/$candidate-e2e-xcodegen.txt" 2>&1
+  (cd "$SCRIPTS_DIR/e2e" && "$XCODEGEN_BIN" generate --spec project.yml) > "$EVIDENCE_DIR/$candidate-e2e-xcodegen.txt" 2>&1
   xcrun simctl spawn "$udid" log stream --style compact --level info --predicate 'subsystem == "com.example.g1bench"' \
     > "$EVIDENCE_DIR/$candidate-e2e-markers.txt" 2>&1 &
   stream_pid=$!
   sleep 3
   TEST_RUNNER_G1_BUNDLE_ID="$bundle" TEST_RUNNER_G1_URL_SCHEME="$scheme" \
-    xcodebuild -project "$PROBE_ROOT/ios-ci/e2e/G1E2E.xcodeproj" -scheme G1E2E -destination "id=$udid" \
+    xcodebuild -project "$SCRIPTS_DIR/e2e/G1E2E.xcodeproj" -scheme G1E2E -destination "id=$udid" \
     -derivedDataPath "$RUNNER_TEMP/e2e-dd-$candidate" -resultBundlePath "$EVIDENCE_DIR/$candidate-e2e.xcresult" \
     CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$EVIDENCE_DIR/$candidate-e2e.txt" || rc=$?
   kill "$stream_pid" 2>/dev/null || true
@@ -410,11 +428,12 @@ hash_tree() {
 
 # Lock check: every lock file named is tracked and unchanged after resolution and the builds, and no other lock file of
 # the package managers of the job exists in the tree untracked or changed. Paths are relative to the tree root. The
-# named files are copied into the evidence as they are after the job.
+# named files are copied into the evidence as they are after the job. In update mode (G1_RESOLUTION=update) the same
+# facts are recorded and the copies are the lock files that the resolution wrote; a changed file does not fail the stage.
 lock_check() {
   local name="$1" f rc=0 stray
   shift
-  : > "$EVIDENCE_DIR/$name-lock-check.txt"
+  echo "resolution=$G1_RESOLUTION" > "$EVIDENCE_DIR/$name-lock-check.txt"
   for f in "$@"; do
     if ! git -C "$PROBE_ROOT" ls-files --error-unmatch -- "$f" > /dev/null 2>&1; then
       echo "untracked $f" | tee -a "$EVIDENCE_DIR/$name-lock-check.txt"
@@ -441,5 +460,73 @@ lock_check() {
     done <<< "$stray"
     rc=5
   fi
+  if [ "$G1_RESOLUTION" = update ]; then return 0; fi
   return "$rc"
+}
+
+# ---------------------------------------------------------------- tree preparation and inventories
+
+# Dataset regeneration check and asset placement of the tree that is built (the scripts are the ones beside this file).
+prepare_data() { G1_TREE_ROOT="$PROBE_ROOT" bash "$SCRIPTS_DIR/prepare-data.sh"; }
+
+# Static record of a built app for the inspection of the release artifacts: Info.plist as JSON and the privacy manifests.
+capture_app_metadata() {
+  local app="$1" name="$2"
+  plutil -p "$app/Info.plist" > "$EVIDENCE_DIR/$name-info-plist.txt"
+  # the JSON form exists when every value of the file has a JSON form (no date or data value)
+  plutil -convert json -r -o "$EVIDENCE_DIR/$name-info-plist.json" "$app/Info.plist" 2> /dev/null || rm -f "$EVIDENCE_DIR/$name-info-plist.json"
+  (cd "$app" && find . -name 'PrivacyInfo.xcprivacy' -type f | sort) > "$EVIDENCE_DIR/$name-privacy-manifests.txt"
+}
+
+# Dependency inventory of the iOS path: the Swift packages that were checked out (name, the revision of the resolved
+# file is in the lock file copy) with their licence files, and the acknowledgement list CocoaPods generated. Arguments:
+# <name> <directory to search for SourcePackages/checkouts>... ; the job's own package directory is always searched.
+# PODS_DIR names the Pods directory of a CocoaPods installation. A job that names the map engine as a Swift package or a
+# pod and finds neither has not inventoried its dependencies: the stage fails.
+capture_dependencies() {
+  local name="$1"
+  shift
+  python3 - "$EVIDENCE_DIR" "$name" "${PODS_DIR:-}" "$SPM_DIR" "$@" <<'PY'
+import hashlib, json, pathlib, plistlib, sys
+evidence, name, pods_dir = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+roots = [pathlib.Path(a) for a in sys.argv[4:]]
+checkouts = {}
+for root in roots:
+    if not root.is_dir():
+        continue
+    # the package directory itself, or SourcePackages/checkouts at most four levels below (Xcode's derived data layout)
+    found = [root / 'checkouts'] if (root / 'checkouts').is_dir() else [p for pattern in ('SourcePackages/checkouts', '*/SourcePackages/checkouts',
+        '*/*/SourcePackages/checkouts', '*/*/*/SourcePackages/checkouts') for p in root.glob(pattern) if p.is_dir()]
+    for directory in found:
+        for package in sorted(p for p in directory.iterdir() if p.is_dir()):
+            checkouts.setdefault(package.name, package)
+packages = []
+for pkg, directory in sorted(checkouts.items()):
+    licences = []
+    for f in sorted(directory.iterdir()):
+        if f.is_file() and f.name.upper().split('.')[0] in ('LICENSE', 'LICENCE', 'COPYING', 'NOTICE'):
+            data = f.read_bytes()
+            target = evidence / 'licenses' / 'swift-packages' / pkg / f.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            licences.append({'file': f.name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)})
+    packages.append({'package': pkg, 'licence_files': licences})
+pods = None
+if pods_dir:
+    pods = []
+    for plist in sorted(pathlib.Path(pods_dir).glob('Target Support Files/Pods-*/Pods-*-acknowledgements.plist')):
+        data = plist.read_bytes()
+        target = evidence / 'licenses' / 'cocoapods' / plist.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        entries = [e for e in plistlib.loads(data).get('PreferenceSpecifiers', []) if e.get('License') or e.get('FooterText')]
+        pods.append({'file': plist.name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data),
+                     'pods': [{'pod': e.get('Title'), 'licence': e.get('License')} for e in entries if e.get('Title') and e.get('Title') != 'Acknowledgements']})
+record = {'schema': 'G1-IOS-DEPENDENCIES-1.0', 'job': name, 'swift_packages': packages, 'cocoapods_acknowledgements': pods}
+(evidence / (name + '-dependencies.json')).write_text(json.dumps(record, indent=1) + '\n', encoding='utf-8')
+names = [p['package'].lower() for p in packages] + [e['pod'].lower() for a in (pods or []) for e in a['pods']]
+print('dependencies:', ' '.join(sorted(names)) or 'none')
+if not any('maplibre' in n for n in names):
+    sys.exit('the map engine is in neither the Swift packages nor the pods that were found: the inventory is incomplete')
+PY
 }
