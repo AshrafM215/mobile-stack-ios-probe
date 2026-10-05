@@ -48,13 +48,45 @@ private struct Header: View {
     var body: some View {
         HStack {
             if let backId, let onBack {
-                Button(s.t("common.back"), action: onBack).frame(minWidth: 48, minHeight: 48).accessibilityIdentifier(backId)
+                Button(s.t("common.back"), action: onBack).buttonStyle(TargetButtonStyle()).accessibilityIdentifier(backId)
             }
             Text(title).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 .modifier(OptionalIdentifier(id: titleId))
             Spacer()
         }
         .padding(.horizontal, 12)
+    }
+}
+
+/// Buttons whose touch target is at least 48 x 48 points. The label carries the minimum size and the shape that takes
+/// touches: a frame around a SwiftUI Button does not enlarge what can be touched (with `.frame(minHeight: 48)` around
+/// the button the home actions were 20.3 points high in the accessibility tree of the simulator).
+private struct TargetButtonStyle: ButtonStyle {
+    enum Kind { case text, filled, outlined }
+    var kind: Kind = .text
+    var selected = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        TargetButtonBody(configuration: configuration, kind: kind, selected: selected)
+    }
+}
+
+private struct TargetButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let kind: TargetButtonStyle.Kind
+    let selected: Bool
+    @Environment(\.isEnabled) private var enabled
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 10)
+        configuration.label
+            .padding(.horizontal, kind == .text ? 6 : 14)
+            .frame(minWidth: 48, minHeight: 48)
+            .foregroundStyle(kind == .filled ? Color.white : primary)
+            .background(shape.fill(kind == .filled ? primary : (selected ? primary.opacity(0.16) : Color.clear)))
+            .overlay(shape.stroke(kind == .outlined ? primary.opacity(0.55) : Color.clear, lineWidth: 1))
+            .contentShape(Rectangle())
+            .opacity(enabled ? (configuration.isPressed ? 0.6 : 1) : 0.45)
     }
 }
 
@@ -72,7 +104,7 @@ private struct LabelValue: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(label).font(.caption)
             Text(value).accessibilityIdentifier(id)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -98,18 +130,13 @@ struct HomeScreen: View {
     @State private var window = CGSize.zero
     /// The text scale factor of the Dynamic Type setting (1.0 at the default size).
     @ScaledMetric(relativeTo: .body) private var fontScale: CGFloat = 1
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         let enabled = state.trusted && state.index != nil
         let compact = window != .zero &&
             LayoutPolicy.mode(width: Double(window.width), height: Double(window.height), fontScale: Double(fontScale)) == .compact
         ZStack {
-            // measures the window; the keyboard is left out of it, so typing never changes the layout mode
-            GeometryReader { geo in
-                Color.clear.task(id: geo.size) { window = geo.size }
-            }
-            .ignoresSafeArea(.keyboard)
-            .accessibilityHidden(true)
             if compact {
                 // compact: one vertical scroll container, every block at its natural height, every result row laid out
                 ScrollView {
@@ -143,6 +170,15 @@ struct HomeScreen: View {
                 }
             }
         }
+        .background {
+            // measures the window; the keyboard is left out of it, so typing never changes the layout mode. A background,
+            // not a layer of its own: a clear layer beside the content was an element without a description in the
+            // accessibility tree
+            GeometryReader { geo in
+                Color.clear.task(id: geo.size) { window = geo.size }
+            }
+            .ignoresSafeArea(.keyboard)
+        }
         .task(id: enabled) {
             if enabled { NextFrame.run { _ in state.homeShown() } }
         }
@@ -174,14 +210,14 @@ struct HomeScreen: View {
     @ViewBuilder
     private var actions: some View {
         let s = state.s
-        Button(s.t("lang.toggle"), action: state.toggleLang).frame(minHeight: 48)
+        Button(s.t("lang.toggle"), action: state.toggleLang).buttonStyle(TargetButtonStyle())
             .accessibilityLabel(s.t("lang.toggle.a11y")).accessibilityIdentifier("home.lang")
-        Button(s.t("home.qr.scan"), action: state.scanQr).frame(minHeight: 48).accessibilityIdentifier("home.qr")
-        Button(s.t("home.settings"), action: state.openSettings).frame(minHeight: 48).accessibilityIdentifier("home.settings")
+        Button(s.t("home.qr.scan"), action: state.scanQr).buttonStyle(TargetButtonStyle()).accessibilityIdentifier("home.qr")
+        Button(s.t("home.settings"), action: state.openSettings).buttonStyle(TargetButtonStyle()).accessibilityIdentifier("home.settings")
     }
 
     private var subtitle: some View {
-        Text(state.s.t("app.subtitle")).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 16)
+        Text(state.s.t("app.subtitle")).font(.footnote).padding(.horizontal, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -193,8 +229,11 @@ struct HomeScreen: View {
     private func searchRow(enabled: Bool) -> some View {
         let s = state.s
         return HStack(spacing: 8) {
+            // the field's box is 48 points high and a touch anywhere in the box focuses the field (the text field itself
+            // keeps its own height inside it)
             TextField(s.t("home.search.hint"), text: $state.query)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
                 .disabled(!enabled)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -202,11 +241,16 @@ struct HomeScreen: View {
                 .onSubmit { state.submitSearch() }
                 .accessibilityLabel(s.t("home.search.label"))
                 .accessibilityIdentifier("home.search.field")
+                .padding(.horizontal, 10)
+                .frame(minHeight: 48)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(UIColor.separator), lineWidth: 1))
+                .contentShape(Rectangle())
+                .onTapGesture { if enabled { searchFocused = true } }
             if !state.query.isEmpty {
-                Button(s.t("home.search.clear"), action: state.clearSearch).frame(minHeight: 48).accessibilityIdentifier("home.search.clear")
+                Button(s.t("home.search.clear"), action: state.clearSearch).buttonStyle(TargetButtonStyle()).accessibilityIdentifier("home.search.clear")
             }
             Button(s.t("home.search.submit")) { state.submitSearch() }
-                .buttonStyle(.borderedProminent).frame(minHeight: 48).disabled(!enabled).accessibilityIdentifier("home.search.submit")
+                .buttonStyle(TargetButtonStyle(kind: .filled)).disabled(!enabled).accessibilityIdentifier("home.search.submit")
         }
         .padding(.horizontal, 16)
     }
@@ -219,7 +263,6 @@ struct HomeScreen: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.t("home.result.item", ["code": d.code, "name": d.name(s.lang)]))
                     Text(s.t("common.building_floor", ["building": d.building, "floor": d.floor])).font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                 .padding(.horizontal, 16)
@@ -267,8 +310,7 @@ struct HomeScreen: View {
             ForEach(1...3, id: \.self) { f in
                 let selected = state.floor == f
                 Button(s.t("home.floor.option", ["floor": f])) { state.setFloor(f) }
-                    .buttonStyle(.bordered)
-                    .frame(minHeight: 48)
+                    .buttonStyle(TargetButtonStyle(kind: .outlined, selected: selected))
                     .accessibilityLabel(selected ? s.t("home.floor.selected", ["floor": f]) : s.t("home.floor.option", ["floor": f]))
                     .accessibilityAddTraits(selected ? AccessibilityTraits.isSelected : AccessibilityTraits())
                     .accessibilityIdentifier("home.floor.\(f)")
@@ -320,9 +362,9 @@ struct DetailsScreen: View {
                             .accessibilityIdentifier("details.schedule.list")
                         }
                         HStack(spacing: 12) {
-                            Button(s.t("details.route")) { state.openRoute(d.id) }.buttonStyle(.borderedProminent).frame(minHeight: 48)
+                            Button(s.t("details.route")) { state.openRoute(d.id) }.buttonStyle(TargetButtonStyle(kind: .filled))
                                 .accessibilityIdentifier("details.route")
-                            Button(s.t("details.showmap")) { state.showOnMap(d.id) }.buttonStyle(.bordered).frame(minHeight: 48)
+                            Button(s.t("details.showmap")) { state.showOnMap(d.id) }.buttonStyle(TargetButtonStyle(kind: .outlined))
                                 .accessibilityIdentifier("details.showmap")
                         }
                         .padding(16)
@@ -366,7 +408,7 @@ struct RouteScreen: View {
                                value: d.map { s.t("home.result.item", ["code": $0.code, "name": $0.name(s.lang)]) } ?? destinationId)
                     Toggle(s.t("route.stepfree"), isOn: $state.stepFree).frame(minHeight: 48).padding(.horizontal, 16)
                         .accessibilityIdentifier("route.stepfree")
-                    Button(s.t("route.compute")) { state.computeRoute() }.buttonStyle(.borderedProminent).frame(minHeight: 48).padding(16)
+                    Button(s.t("route.compute")) { state.computeRoute() }.buttonStyle(TargetButtonStyle(kind: .filled)).padding(16)
                         .accessibilityIdentifier("route.compute")
                     Text(trustText(s, state.bundleInfo)).padding(.horizontal, 16).accessibilityIdentifier("route.trust")
                     if let r, r.outcome == "PATH", let sum = state.summary {
@@ -380,7 +422,7 @@ struct RouteScreen: View {
                         }
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("route.steps")
-                        Button(s.t("route.ar")) { state.openAr() }.buttonStyle(.bordered).frame(minHeight: 48).padding(16)
+                        Button(s.t("route.ar")) { state.openAr() }.buttonStyle(TargetButtonStyle(kind: .outlined)).padding(16)
                             .accessibilityIdentifier("route.ar")
                     } else if let r {
                         Text(rejectText(s, r.outcome)).padding(16).accessibilityIdentifier("route.reject")
@@ -410,7 +452,7 @@ struct FallbackScreen: View {
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("fallback.steps")
-                    Button(s.t("fallback.back"), action: state.back).buttonStyle(.borderedProminent).frame(minHeight: 48).padding(16)
+                    Button(s.t("fallback.back"), action: state.back).buttonStyle(TargetButtonStyle(kind: .filled)).padding(16)
                         .accessibilityIdentifier("fallback.back")
                 }
             }
@@ -428,7 +470,7 @@ struct QrScreen: View {
         VStack(alignment: .leading, spacing: 0) {
             Header(s: s, title: s.t("qr.title"))
             Text(qrText(s, state.qrResult ?? [:])).padding(16).accessibilityIdentifier("qr.result")
-            Button(s.t("common.close"), action: state.back).buttonStyle(.borderedProminent).frame(minHeight: 48).padding(16)
+            Button(s.t("common.close"), action: state.back).buttonStyle(TargetButtonStyle(kind: .filled)).padding(16)
                 .accessibilityIdentifier("qr.close")
         }
     }
@@ -462,7 +504,7 @@ struct SettingsScreen: View {
                     }
                     Text(trustText(s, info)).padding(.horizontal, 16).accessibilityIdentifier("settings.status")
                     Button(s.t("settings.update")) { Task { @MainActor in _ = await state.update() } }
-                        .buttonStyle(.borderedProminent).frame(minHeight: 48).padding(16).accessibilityIdentifier("settings.update")
+                        .buttonStyle(TargetButtonStyle(kind: .filled)).padding(16).accessibilityIdentifier("settings.update")
                     if let update { Text(update).padding(.horizontal, 16).accessibilityIdentifier("settings.update.status") }
                     if let code = state.lastResult {
                         Text(s.has("result.\(code)") ? s.t("result.\(code)") : s.t("error.generic")).padding(16)

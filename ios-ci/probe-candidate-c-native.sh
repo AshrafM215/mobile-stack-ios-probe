@@ -22,10 +22,12 @@ xcodebuild -project G1CandidateC.xcodeproj -scheme G1CandidateC -configuration R
   | tee "$EVIDENCE_DIR/$C-build-simulator.txt"
 APP=build/dd/Build/Products/Release-iphonesimulator/G1CandidateC.app
 hash_tree "$APP" "$C-simulator-app"
+capture_linkage "$APP" "$C-simulator-app"
 launch_and_wait_ready "$UDID" "$APP" com.example.g1bench.candidatec "$C"
 run_e2e "$UDID" com.example.g1bench.candidatec g1bench-c "$C"
 xcodebuild -project G1CandidateC.xcodeproj -scheme G1CandidateC -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' -derivedDataPath build/dd-device CODE_SIGNING_ALLOWED=NO build 2>&1 \
   | tee "$EVIDENCE_DIR/$C-build-iphoneos-unsigned.txt"
 hash_tree build/dd-device/Build/Products/Release-iphoneos/G1CandidateC.app "$C-iphoneos-unsigned-app"
+capture_linkage build/dd-device/Build/Products/Release-iphoneos/G1CandidateC.app "$C-iphoneos-unsigned-app"
 find . -name Package.resolved -not -path './build/*' -exec cp {} "$EVIDENCE_DIR/$C-Package.resolved" \; || true

@@ -144,6 +144,29 @@ run_e2e() {
   return "$rc"
 }
 
+# Linkage record of a built app: the dynamic libraries of its executable and of every embedded framework, and whether
+# the two native dependencies the probe is about are linked: the map engine (MapLibre) and ARKit. A build that does not
+# link both fails here.
+capture_linkage() {
+  local app="$1" name="$2" exe f b
+  exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+  {
+    echo "== executable $exe"
+    xcrun otool -L "$app/$exe"
+    for f in "$app"/Frameworks/*.framework; do
+      [ -d "$f" ] || continue
+      b=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$f/Info.plist" 2>/dev/null || basename "$f" .framework)
+      echo "== framework $(basename "$f")"
+      xcrun otool -L "$f/$b"
+    done
+  } > "$EVIDENCE_DIR/$name-linkage.txt" 2>&1
+  {
+    echo "maplibre_lines=$(grep -ci 'maplibre' "$EVIDENCE_DIR/$name-linkage.txt" || true)"
+    echo "arkit_lines=$(grep -c 'ARKit.framework' "$EVIDENCE_DIR/$name-linkage.txt" || true)"
+  } | tee "$EVIDENCE_DIR/$name-linkage-summary.txt"
+  grep -qi 'maplibre' "$EVIDENCE_DIR/$name-linkage.txt" && grep -q 'ARKit.framework' "$EVIDENCE_DIR/$name-linkage.txt"
+}
+
 hash_tree() {
   local path="$1" name="$2"
   (cd "$(dirname "$path")" && find "$(basename "$path")" -type f -print0 | sort -z | xargs -0 shasum -a 256) \

@@ -23,10 +23,12 @@ cd "$C"
 "${F[@]}" build ios --simulator --debug 2>&1 | tee "$EVIDENCE_DIR/$C-build-simulator.txt"
 APP=build/ios/iphonesimulator/Runner.app
 hash_tree "$APP" "$C-simulator-app"
+capture_linkage "$APP" "$C-simulator-app"
 UDID=$(create_simulator G1Probe-A)
 launch_and_wait_ready "$UDID" "$APP" com.example.g1bench.candidatea "$C"
 run_e2e "$UDID" com.example.g1bench.candidatea g1bench-a "$C"
 "${F[@]}" build ios --release --no-codesign 2>&1 | tee "$EVIDENCE_DIR/$C-build-iphoneos-unsigned.txt"
 hash_tree build/ios/iphoneos/Runner.app "$C-iphoneos-unsigned-app"
+capture_linkage build/ios/iphoneos/Runner.app "$C-iphoneos-unsigned-app"
 cp ios/Podfile.lock "$EVIDENCE_DIR/$C-Podfile.lock" 2>/dev/null || true
 find ios -name Package.resolved -exec cp {} "$EVIDENCE_DIR/$C-Package.resolved" \; || true

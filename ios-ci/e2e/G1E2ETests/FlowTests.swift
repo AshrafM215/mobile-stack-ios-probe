@@ -69,6 +69,26 @@ final class FlowTests: XCTestCase {
         return e
     }
 
+    /// Gives a text field keyboard focus the way a person does: a tap, and another tap when no cursor appears within
+    /// four seconds (up to four taps). Returns the number of taps, 0 when the field never took focus; the number is
+    /// printed, because a field that needs more than one tap is a fact of the candidate on this simulator.
+    @discardableResult
+    private func focus(_ field: XCUIElement, _ name: String) -> Int {
+        for attempt in 1...4 {
+            field.tap()
+            let deadline = Date().addingTimeInterval(4)
+            while Date() < deadline {
+                if (field.value(forKey: "hasKeyboardFocus") as? Bool) == true {
+                    print("G1_E2E focus field=\(name) taps=\(attempt)")
+                    return attempt
+                }
+                usleep(200_000)
+            }
+        }
+        print("G1_E2E focus field=\(name) taps=none")
+        return 0
+    }
+
     /// Types one character per typeText call: XCUITest waits for the app to idle between calls, so the pace is that of
     /// a person typing and does not depend on how fast the runner can synthesize a burst of key events.
     private func typePaced(_ field: XCUIElement, _ text: String) {
@@ -82,11 +102,11 @@ final class FlowTests: XCTestCase {
     func test0BurstTypingIsRecorded() throws {
         let a = launchReady()
         let field = el(a, "home.search.field")
-        field.tap()
-        field.typeText("SB1-F1-R001")
+        let taps = focus(field, "home.search.field")
+        if taps > 0 { field.typeText("SB1-F1-R001") }
         sleep(2)
         let value = field.value as? String ?? ""
-        let line = "burst_typing value=\(value) expected=SB1-F1-R001 match=\(value == "SB1-F1-R001")"
+        let line = "burst_typing focus_taps=\(taps) value=\(value) expected=SB1-F1-R001 match=\(value == "SB1-F1-R001")"
         let report = XCTAttachment(string: line)
         report.name = "burst-typing"
         report.lifetime = .keepAlways
@@ -98,7 +118,7 @@ final class FlowTests: XCTestCase {
         let a = launchReady()
         record(a, "ready")
         let field = el(a, "home.search.field")
-        field.tap()
+        check(a, focus(field, "home.search.field") > 0, "the search field takes keyboard focus")
         typePaced(field, "SB1-F1-R001")
         el(a, "home.search.submit").tap()
         check(a, el(a, "home.result.D001").waitForExistence(timeout: 30), "unique result D001")
@@ -163,6 +183,30 @@ final class FlowTests: XCTestCase {
         report.lifetime = .keepAlways
         add(report)
         print("G1_E2E a11y_audit_issues=\(issues.count)")
+    }
+
+    /// Recorded, not asserted: the size of the home screen's controls as the accessibility tree reports them (points)
+    /// and how many are below 44 x 44 points, the platform's minimum touch target.
+    func test5ControlSizesAreRecorded() throws {
+        let a = launchReady()
+        var lines: [String] = []
+        var small = 0
+        for id in ["home.lang", "home.qr", "home.settings", "home.search.field", "home.search.submit", "home.floor.1", "home.floor.2", "home.floor.3"] {
+            let e = el(a, id)
+            guard e.exists else {
+                lines.append("\(id) absent")
+                continue
+            }
+            let f = e.frame
+            let below = f.width < 44 || f.height < 44
+            if below { small += 1 }
+            lines.append("\(id) \(String(format: "%.1f", f.width))x\(String(format: "%.1f", f.height))\(below ? " below-44" : "")")
+        }
+        let report = XCTAttachment(string: "below_44=\(small)\n" + lines.joined(separator: "\n"))
+        report.name = "control-sizes"
+        report.lifetime = .keepAlways
+        add(report)
+        print("G1_E2E control_sizes below_44=\(small) \(lines.joined(separator: "; "))")
     }
 
     func test4InjectedQrThroughTheLabUrl() throws {

@@ -20,11 +20,13 @@ xcodebuild -workspace ios/G1CandidateB.xcworkspace -scheme G1CandidateB -configu
   | tee "$EVIDENCE_DIR/$C-build-simulator.txt"
 APP=ios/build/dd/Build/Products/Release-iphonesimulator/G1CandidateB.app
 hash_tree "$APP" "$C-simulator-app"
+capture_linkage "$APP" "$C-simulator-app"
 launch_and_wait_ready "$UDID" "$APP" com.example.g1bench.candidateb "$C"
 run_e2e "$UDID" com.example.g1bench.candidateb g1bench-b "$C"
 xcodebuild -workspace ios/G1CandidateB.xcworkspace -scheme G1CandidateB -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' -derivedDataPath ios/build/dd-device CODE_SIGNING_ALLOWED=NO build 2>&1 \
   | tee "$EVIDENCE_DIR/$C-build-iphoneos-unsigned.txt"
 hash_tree ios/build/dd-device/Build/Products/Release-iphoneos/G1CandidateB.app "$C-iphoneos-unsigned-app"
+capture_linkage ios/build/dd-device/Build/Products/Release-iphoneos/G1CandidateB.app "$C-iphoneos-unsigned-app"
 cp ios/Podfile.lock "$EVIDENCE_DIR/$C-Podfile.lock"
 find ios -name Package.resolved -not -path '*/build/*' -exec cp {} "$EVIDENCE_DIR/$C-Package.resolved" \; || true
