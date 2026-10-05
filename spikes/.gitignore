@@ -8,6 +8,7 @@ Pods/
 .cxx/
 .kotlin/
 .idea/
+__pycache__/
 *.iml
 local.properties
 .flutter-plugins

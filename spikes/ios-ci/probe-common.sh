@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Synthetic iOS feasibility job - NON-PRODUCTION / SYNTHETIC DATA ONLY.
-# Shared helpers: stage records, pinned Xcode selection, the environment record of the runner, simulator lifecycle and
-# evidence capture. A job declares its stages once (job_begin) and runs each of them through `stage`. Every stage is
+# Shared helpers: stage records, the readings of the runner's resources, pinned Xcode selection, the environment record
+# of the runner, simulator lifecycle and evidence capture. A job declares its stages once (job_begin) and runs each of them through `stage`. Every stage is
 # recorded with its outcome. A stage that fails does not end the job: the stages that do not need it still run, and a
 # stage whose needed stages did not pass is recorded as skipped. The job exits non-zero when any stage failed or was
 # skipped. The records are what a reader of the run evidence judges: a green job page alone is not evidence.
@@ -41,7 +41,24 @@ job_begin() {
   JOB_STARTED="$(utc_now)"
   STAGES_FILE="$EVIDENCE_DIR/$JOB_NAME-stages.ndjson"
   : > "$STAGES_FILE"
+  # the state of the runner during the job, one reading every twenty seconds (resource-sampler.py)
+  RESOURCES_FILE="$EVIDENCE_DIR/$JOB_NAME-resources.ndjson"
+  : > "$RESOURCES_FILE"
+  python3 "$SCRIPTS_DIR/resource-sampler.py" watch "$RESOURCES_FILE" 20 "$JOB_NAME" &
+  SAMPLER_PID=$!
   trap job_end EXIT
+}
+
+# A runner that its service loses uploads neither the log nor the evidence of its job. The notes of the job page are
+# kept by the service as they are written, so the start of every stage that can take long is noted there with the state
+# of the runner: a lost job then still says which stage it was in. The service keeps ten notes of a step; the stages
+# named here take seconds and are not noted.
+QUIET_STAGES=" configure linkage-simulator linkage-device inventory lock-check "
+stage_note() {
+  local state
+  case "$QUIET_STAGES" in *" $1 "*) return 0 ;; esac
+  state="$(python3 "$SCRIPTS_DIR/resource-sampler.py" once 2>/dev/null || echo 'no reading')"
+  echo "::notice title=g1 stage::$JOB_NAME $1 started $(utc_now); ${state//%/%25}"
 }
 
 # stage <stage id> [needs:<id>,<id>...] <function or command> [args...]
@@ -65,6 +82,7 @@ stage() {
     return 0
   fi
   t0="$(utc_now)"
+  stage_note "$id"
   echo "::group::stage $id"
   set +e
   ( set -euo pipefail; "$@" )
@@ -90,6 +108,11 @@ job_finish() { exit "$JOB_FAILED"; }
 job_end() {
   local rc=$? id
   trap - EXIT
+  # the readings end before the evidence files are listed
+  if [ -n "${SAMPLER_PID:-}" ]; then
+    kill "$SAMPLER_PID" 2>/dev/null || true
+    wait "$SAMPLER_PID" 2>/dev/null || true
+  fi
   for id in $JOB_PLANNED; do
     case " $JOB_DONE " in
       *" $id "*) ;;

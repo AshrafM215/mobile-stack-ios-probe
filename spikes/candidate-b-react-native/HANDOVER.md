@@ -31,7 +31,7 @@ Paths are relative to the tree root.
 - `native-common/ios/`: shared native module for iOS (pod and Swift package `G1NativeCommon`). Sources in `native-common/ios/Sources/G1NativeCommon/`, tests in `native-common/ios/Tests/G1NativeCommonTests/`.
 - `contract/contract.json`: the implementation contract (ids, markers, lab hooks, data contracts, layout policy).
 - `synthetic-data/out/`: generated data. The bundle is in `synthetic-data/out/bundle/`, the trust store is `synthetic-data/out/app/trust_store.json`, expected results are in `synthetic-data/out/oracle/`, trust fixtures in `synthetic-data/out/fixtures/`, anchor-code images in `synthetic-data/out/qr/`, digests in `synthetic-data/out/GENERATION_RECORD.json`.
-- Assets: the application has no asset directory. Map style, glyphs and sprites come from the installed bundle. Android launcher icons are in `candidate-b-react-native/android/app/src/main/res/`.
+- Assets: the application has no asset directory. Map style, glyphs and sprites come from the installed bundle. The Android project has no launcher icon; its resources in `candidate-b-react-native/android/app/src/main/res/` are the application name, the theme and one drawable of the framework template.
 
 ## 3. Build and test
 
