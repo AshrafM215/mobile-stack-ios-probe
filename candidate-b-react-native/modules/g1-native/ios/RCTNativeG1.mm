@@ -30,6 +30,111 @@ static NSString *G1DiagMs(CFTimeInterval seconds)
   return [NSString stringWithFormat:@"%ld", (long)llround(seconds * 1000.0)];
 }
 
+// DIAGNOSTIC (probe branch only): trace of React Native's text input view around a typing burst. The view's
+// textInputDidChange, _setAttributedString: and updateState:oldState: are wrapped (method implementations exchanged at
+// runtime) and every call is written as a G1MARK line with the view's event count, its "coming from JS" flag and the
+// field text, so that the order of typed changes and framework text applications is on record.
+#import <objc/runtime.h>
+
+static id G1DiagBacked(id view)
+{
+  Ivar ivar = class_getInstanceVariable([view class], "_backedTextInputView");
+  return ivar ? object_getIvar(view, ivar) : nil;
+}
+
+static NSString *G1DiagText(id view)
+{
+  id backed = G1DiagBacked(view);
+  if (![backed respondsToSelector:@selector(attributedText)]) {
+    return @"?";
+  }
+  NSAttributedString *text = [backed attributedText];
+  return text.string ?: @"";
+}
+
+static NSString *G1DiagCount(id view)
+{
+  Ivar ivar = class_getInstanceVariable([view class], "_mostRecentEventCount");
+  if (!ivar) {
+    return @"?";
+  }
+  NSUInteger value = *(NSUInteger *)((uint8_t *)(__bridge void *)view + ivar_getOffset(ivar));
+  return [@(value) stringValue];
+}
+
+static NSString *G1DiagFromJS(id view)
+{
+  Ivar ivar = class_getInstanceVariable([view class], "_comingFromJS");
+  if (!ivar) {
+    return @"?";
+  }
+  return *(BOOL *)((uint8_t *)(__bridge void *)view + ivar_getOffset(ivar)) ? @"1" : @"0";
+}
+
+static void G1DiagMark(NSString *name, id view, NSArray<NSString *> *extra)
+{
+  NSMutableArray<NSString *> *kv = [NSMutableArray arrayWithArray:@[
+    @"count", G1DiagCount(view), @"js", G1DiagFromJS(view), @"text", G1DiagText(view)
+  ]];
+  [kv addObjectsFromArray:extra];
+  [G1NativeBridge mark:name runtimeNanos:-1 kv:kv];
+}
+
+static void (*G1DiagOrigDidChange)(id, SEL);
+static void G1DiagDidChange(id self, SEL _cmd)
+{
+  G1DiagMark(@"diag.rn.change", self, @[]);
+  G1DiagOrigDidChange(self, _cmd);
+}
+
+static void (*G1DiagOrigSetAttributed)(id, SEL, NSAttributedString *);
+static void G1DiagSetAttributed(id self, SEL _cmd, NSAttributedString *value)
+{
+  G1DiagMark(@"diag.rn.set.begin", self, @[ @"arg", value.string ?: @"" ]);
+  G1DiagOrigSetAttributed(self, _cmd, value);
+  G1DiagMark(@"diag.rn.set.end", self, @[]);
+}
+
+// updateState:oldState: takes two C++ references (const std::shared_ptr<const State> &): at the call boundary a
+// reference is a pointer, and the first word of a libc++ shared_ptr is the stored pointer (null: no old state).
+static void (*G1DiagOrigUpdateState)(id, SEL, const void *, const void *);
+static void G1DiagUpdateState(id self, SEL _cmd, const void *state, const void *oldState)
+{
+  BOOL oldIsNull = oldState == NULL || *(void *const *)oldState == NULL;
+  G1DiagMark(@"diag.rn.state.begin", self, @[ @"old", oldIsNull ? @"null" : @"set" ]);
+  G1DiagOrigUpdateState(self, _cmd, state, oldState);
+  G1DiagMark(@"diag.rn.state.end", self, @[]);
+}
+
+static void G1DiagInstallTrace(void)
+{
+  Class cls = NSClassFromString(@"RCTTextInputComponentView");
+  if (!cls) {
+    [G1NativeBridge mark:@"diag.rn.trace" runtimeNanos:-1 kv:@[ @"installed", @"0", @"reason", @"no_class" ]];
+    return;
+  }
+  Method didChange = class_getInstanceMethod(cls, NSSelectorFromString(@"textInputDidChange"));
+  Method setAttributed = class_getInstanceMethod(cls, NSSelectorFromString(@"_setAttributedString:"));
+  Method updateState = class_getInstanceMethod(cls, NSSelectorFromString(@"updateState:oldState:"));
+  if (didChange) {
+    G1DiagOrigDidChange = (void (*)(id, SEL))method_setImplementation(didChange, (IMP)G1DiagDidChange);
+  }
+  if (setAttributed) {
+    G1DiagOrigSetAttributed =
+        (void (*)(id, SEL, NSAttributedString *))method_setImplementation(setAttributed, (IMP)G1DiagSetAttributed);
+  }
+  if (updateState) {
+    G1DiagOrigUpdateState =
+        (void (*)(id, SEL, const void *, const void *))method_setImplementation(updateState, (IMP)G1DiagUpdateState);
+  }
+  [G1NativeBridge mark:@"diag.rn.trace"
+          runtimeNanos:-1
+                    kv:@[
+                      @"installed", @"1", @"change", didChange ? @"1" : @"0", @"set", setAttributed ? @"1" : @"0", @"state",
+                      updateState ? @"1" : @"0"
+                    ]];
+}
+
 @interface G1DiagWatch : NSObject
 + (void)start;
 @end
@@ -48,6 +153,7 @@ static NSString *G1DiagMs(CFTimeInterval seconds)
   dispatch_once(&once, ^{
     watch = [G1DiagWatch new];
     dispatch_async(dispatch_get_main_queue(), ^{
+      G1DiagInstallTrace();
       [[NSNotificationCenter defaultCenter] addObserver:watch
                                                selector:@selector(textChanged:)
                                                    name:UITextFieldTextDidChangeNotification

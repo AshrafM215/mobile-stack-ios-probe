@@ -110,29 +110,42 @@ final class FlowTests: XCTestCase {
         check(a, waitFor(el(a, "home.title"), "label == '\(before)'", timeout: 20), "title language restored")
     }
 
-    /// DIAGNOSTIC (probe branch only): the same typing burst with candidate B's store notification of typed text
-    /// disabled (launch argument read by B only; A and C ignore it).
-    func test1bDiagQuietTyping() throws {
-        let a = launchReady(["-G1DiagQuiet", "YES"])
+    /// DIAGNOSTIC (probe branch only), each run alone on a freshly created simulator (first keyboard use).
+    private func diagBurst(_ a: XCUIApplication, _ name: String) {
         let field = el(a, "home.search.field")
         field.tap()
         field.typeText("SB1-F1-R001")
-        sleep(2)
+        sleep(3)
         let value = field.value as? String ?? "-"
-        print("G1_E2E diag quiet value=\(value)")
-        check(a, value == "SB1-F1-R001", "quiet typing value")
+        print("G1_E2E diag \(name) value=\(value) match=\(value == "SB1-F1-R001")")
     }
 
-    /// DIAGNOSTIC (probe branch only): one character per typeText call (XCUITest waits for the app to idle in between).
-    func test1cDiagCharByChar() throws {
+    /// Arabic interface (right-aligned field), one typing burst.
+    func testDiagBurstArabic() throws {
+        let a = launchReady()
+        diagBurst(a, "burst-ar")
+    }
+
+    /// English interface (left-aligned field) through the lab language hook, one typing burst.
+    func testDiagBurstEnglish() throws {
+        let scheme = try XCTUnwrap(env["G1_URL_SCHEME"], "lab URL scheme (TEST_RUNNER_G1_URL_SCHEME)")
+        let a = launchReady()
+        let before = el(a, "home.title").label
+        let args = #"{"lang":"en"}"#.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        a.open(URL(string: "\(scheme)://cmd?name=lang.set&args=\(args)")!)
+        check(a, waitFor(el(a, "home.title"), "label != '\(before)'", timeout: 30), "title language changed")
+        diagBurst(a, "burst-en")
+    }
+
+    /// Arabic interface, one character per typeText call (XCUITest waits for the app to idle in between).
+    func testDiagPacedArabic() throws {
         let a = launchReady()
         let field = el(a, "home.search.field")
         field.tap()
         for ch in "SB1-F1-R001" { field.typeText(String(ch)) }
-        sleep(2)
+        sleep(3)
         let value = field.value as? String ?? "-"
-        print("G1_E2E diag charbychar value=\(value)")
-        check(a, value == "SB1-F1-R001", "char-by-char typing value")
+        print("G1_E2E diag paced-ar value=\(value) match=\(value == "SB1-F1-R001")")
     }
 
     func test2LargestAccessibilityTextSize() throws {
