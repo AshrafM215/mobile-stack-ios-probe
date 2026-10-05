@@ -158,12 +158,12 @@
     }
   },
   "common_native_module": {
-    "android": "spikes/native-common/android (Gradle library g1-native-common, Kotlin)",
+    "android": "spikes/native-common/android (Gradle library g1-native-common, Java)",
     "ios": "spikes/native-common/ios (Swift package G1NativeCommon; CocoaPods podspec for B)",
     "owns": [
       "monotonic clock and G1MARK trace",
       "bundle install/verify/activate/import (G1-TRUST-1.0) and trusted-time high-water mark",
-      "QR payload validation (G1-QR-1.0), injected image decode (ZXing core 3.5.4 / Vision) and the camera scanner (CameraX + ZXing / AVFoundation)",
+      "QR payload validation (G1-QR-1.0), injected image decode (ZXing core 3.5.4 / Core Image detector) and the camera scanner (CameraX + ZXing / AVFoundation)",
       "AR availability, the full-screen native AR screen and the injected AR provider",
       "bridge workload echo/CRC-32 worker and native-to-runtime emitter",
       "secure session marker storage (Android Keystore / iOS Keychain)",
@@ -756,8 +756,11 @@
     "permissions": {
       "android": [
         "android.permission.CAMERA (requested only on QR/AR entry)",
-        "android.permission.INTERNET (map binding and lab update only)"
+        "android.permission.INTERNET (map binding and lab update only)",
+        "android.permission.ACCESS_NETWORK_STATE (declared by the map engine's manifest for its connectivity monitor; granted at install, reads no user data)",
+        "android.permission.ACCESS_WIFI_STATE (declared by the map engine's manifest; granted at install, reads no user data)"
       ],
+      "android_removed": "ACCESS_COARSE_LOCATION and ACCESS_FINE_LOCATION, which the map engine's manifest (and a map binding package) declares, are removed in the app manifest: the app never reads the device location",
       "ios": [
         "NSCameraUsageDescription (requested only on QR/AR entry)"
       ]

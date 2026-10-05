@@ -476,10 +476,26 @@ capture_app_metadata() {
   # the JSON form exists when every value of the file has a JSON form (no date or data value)
   plutil -convert json -r -o "$EVIDENCE_DIR/$name-info-plist.json" "$app/Info.plist" 2> /dev/null || rm -f "$EVIDENCE_DIR/$name-info-plist.json"
   (cd "$app" && find . -name 'PrivacyInfo.xcprivacy' -type f | sort) > "$EVIDENCE_DIR/$name-privacy-manifests.txt"
+  # the privacy manifests as data: path inside the bundle -> manifest (a date or data value is kept as text)
+  python3 - "$app" "$EVIDENCE_DIR/$name-privacy-manifests.json" <<'PY'
+import json, pathlib, plistlib, sys
+app, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+manifests = {}
+for f in sorted(app.rglob('PrivacyInfo.xcprivacy')):
+    if f.is_file():
+        try:
+            manifests[f.relative_to(app).as_posix()] = plistlib.loads(f.read_bytes())
+        except Exception as error:
+            manifests[f.relative_to(app).as_posix()] = {'unreadable': str(error)}
+out.write_text(json.dumps({'schema': 'G1-IOS-PRIVACY-MANIFESTS-1.0', 'manifests': manifests}, indent=1, sort_keys=True, default=str) + '\n', encoding='utf-8')
+PY
+  # static secret scan of the bundle (patterns and the private halves of the lab keys); hits are recorded, never printed
+  node "$SCRIPTS_DIR/secret-scan.mjs" "$app" --out "$EVIDENCE_DIR/$name-secret-scan.json"
 }
 
-# Dependency inventory of the iOS path: the Swift packages that were checked out (name, the revision of the resolved
-# file is in the lock file copy) with their licence files, and the acknowledgement list CocoaPods generated. Arguments:
+# Dependency inventory of the iOS path: the Swift packages that were checked out (revision, the binary targets their
+# manifest declares with the checksums the package manager verifies, licence files), the binary frameworks the package
+# manager and CocoaPods installed (by the digest of their trees) and the acknowledgement list CocoaPods generated. Arguments:
 # <name> <directory to search for SourcePackages/checkouts>... ; the job's own package directory is always searched.
 # PODS_DIR names the Pods directory of a CocoaPods installation. A job that names the map engine as a Swift package or a
 # pod and finds neither has not inventoried its dependencies: the stage fails.
@@ -487,7 +503,7 @@ capture_dependencies() {
   local name="$1"
   shift
   python3 - "$EVIDENCE_DIR" "$name" "${PODS_DIR:-}" "$SPM_DIR" "$@" <<'PY'
-import hashlib, json, pathlib, plistlib, sys
+import hashlib, json, os, pathlib, plistlib, re, subprocess, sys
 evidence, name, pods_dir = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 roots = [pathlib.Path(a) for a in sys.argv[4:]]
 checkouts = {}
@@ -510,7 +526,48 @@ for pkg, directory in sorted(checkouts.items()):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
             licences.append({'file': f.name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)})
-    packages.append({'package': pkg, 'licence_files': licences})
+    # the revision that was checked out and the binary targets the manifest of that revision declares (a binary target
+    # is fetched by URL and checked by the package manager against this checksum, the SHA-256 of the archive)
+    head = subprocess.run(['git', '-C', str(directory), 'rev-parse', 'HEAD'], capture_output=True, text=True)
+    manifest = directory / 'Package.swift'
+    binaries = []
+    if manifest.is_file():
+        for m in re.finditer(r'\.binaryTarget\(\s*name:\s*"([^"]+)"\s*,\s*url:\s*"([^"]+)"\s*,\s*checksum:\s*"([0-9a-fA-F]{64})"', manifest.read_text(encoding='utf-8', errors='replace')):
+            binaries.append({'name': m.group(1), 'url': m.group(2), 'checksum_sha256': m.group(3).lower()})
+    packages.append({'package': pkg, 'revision': head.stdout.strip() if head.returncode == 0 else None, 'binary_targets': binaries, 'licence_files': licences})
+
+def tree_digest(directory):
+    # SHA-256 over the sorted lines "<SHA-256 of the file>  <path>" of every file; a symbolic link is the line "link:<target>  <path>"
+    lines, size = [], 0
+    for f in sorted(directory.rglob('*')):
+        rel = f.relative_to(directory).as_posix()
+        if f.is_symlink():
+            lines.append('link:%s  %s' % (os.readlink(f), rel))
+        elif f.is_file():
+            data = f.read_bytes()
+            size += len(data)
+            lines.append('%s  %s' % (hashlib.sha256(data).hexdigest(), rel))
+    lines.sort()
+    return {'entries': len(lines), 'bytes': size, 'tree_sha256': hashlib.sha256(('\n'.join(lines) + '\n').encode()).hexdigest()}
+
+def frameworks(root):
+    # every binary framework bundle below root, outermost only (an xcframework holds the frameworks of its slices)
+    found = []
+    for current, dirs, _ in os.walk(root):
+        for d in sorted(dirs):
+            if d.endswith('.xcframework'):
+                found.append(pathlib.Path(current, d))
+        dirs[:] = sorted(d for d in dirs if not d.endswith('.xcframework'))
+    return [{'path': f.relative_to(root).as_posix(), **tree_digest(f)} for f in sorted(found)]
+
+swift_binaries = []
+for root in roots:
+    for artifacts in ([root / 'artifacts'] if (root / 'artifacts').is_dir() else [p for pattern in ('SourcePackages/artifacts', '*/SourcePackages/artifacts',
+            '*/*/SourcePackages/artifacts', '*/*/*/SourcePackages/artifacts') for p in root.glob(pattern) if p.is_dir()]):
+        for entry in frameworks(artifacts):
+            if not any(e['path'] == entry['path'] for e in swift_binaries):
+                swift_binaries.append(entry)
+swift_binaries.sort(key=lambda e: e['path'])
 pods = None
 if pods_dir:
     pods = []
@@ -522,7 +579,10 @@ if pods_dir:
         entries = [e for e in plistlib.loads(data).get('PreferenceSpecifiers', []) if e.get('License') or e.get('FooterText')]
         pods.append({'file': plist.name, 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data),
                      'pods': [{'pod': e.get('Title'), 'licence': e.get('License')} for e in entries if e.get('Title') and e.get('Title') != 'Acknowledgements']})
-record = {'schema': 'G1-IOS-DEPENDENCIES-1.0', 'job': name, 'swift_packages': packages, 'cocoapods_acknowledgements': pods}
+pod_binaries = frameworks(pathlib.Path(pods_dir)) if pods_dir else None
+record = {'schema': 'G1-IOS-DEPENDENCIES-1.1', 'job': name, 'swift_packages': packages, 'swift_binary_artifacts': swift_binaries,
+          'cocoapods_acknowledgements': pods, 'cocoapods_binary_frameworks': pod_binaries,
+          'tree_digest_rule': 'SHA-256 over the sorted lines "<SHA-256 of the file>  <path>" of every file of the bundle; a symbolic link is the line "link:<target>  <path>"'}
 (evidence / (name + '-dependencies.json')).write_text(json.dumps(record, indent=1) + '\n', encoding='utf-8')
 names = [p['package'].lower() for p in packages] + [e['pod'].lower() for a in (pods or []) for e in a['pods']]
 print('dependencies:', ' '.join(sorted(names)) or 'none')

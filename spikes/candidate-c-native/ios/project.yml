@@ -43,6 +43,7 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.example.g1bench.candidatec.lab
             CFBundleURLSchemes: [g1bench-c]
+        UIUserInterfaceStyle: Light
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

@@ -1,0 +1,12 @@
+{
+ "schema": "G1-OVERLAY-1.0",
+ "classification": "NON-PRODUCTION / SYNTHETIC DATA ONLY",
+ "name": "selftest-route",
+ "purpose": "Negative control of the oracle path of a derived tree: the route oracle with one deliberately wrong expectation (the length of route case RT02 is one millimetre too long). A job on a tree with this overlay must fail its route oracle unit and nothing else; the overlay is not the oracle of any task.",
+ "files": [
+  {
+   "path": "synthetic-data/out/oracle/route_oracle.json",
+   "sha256": "e1a1cc029924be734118fa7a0bc7a96a2cfb6b21c1f085dde9eaa7b594dc7dcc"
+  }
+ ]
+}

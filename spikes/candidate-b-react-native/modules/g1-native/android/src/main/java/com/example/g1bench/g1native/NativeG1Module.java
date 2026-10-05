@@ -21,8 +21,9 @@ import org.json.JSONObject;
 
 /**
  * TurboModule NativeG1 (JSI). Argument types are enforced by the generated JSI layer (a wrong type is a JavaScript
- * TypeError before any native code runs); sizes are checked here: any string field above 64 KiB (base64 payloads above
- * the encoded size of 64 KiB) is rejected with PAYLOAD_TOO_LARGE, undecodable base64 with BAD_ARGUMENT.
+ * TypeError before any native code runs); sizes are checked here in the methods that carry a payload: the QR payload
+ * and the source label of a bundle import above 64 KiB, the echo payloads above the base64 size of 64 KiB and a bundle
+ * above the base64 size of 64 MiB are rejected with PAYLOAD_TOO_LARGE, undecodable base64 with BAD_ARGUMENT.
  */
 public final class NativeG1Module extends NativeG1Spec implements ActivityEventListener {
     static final int MAX_FIELD = 64 * 1024;
