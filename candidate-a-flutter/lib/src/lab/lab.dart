@@ -33,6 +33,10 @@ const List<Map<String, Object>> uiScript = [
 ];
 const int uiCycleMs = 30000;
 
+/// Settled reading of map.inspect (contract lab.map_inspect_settle; checked against contract.json by the unit tests).
+const int mapSettleIntervalMs = 100;
+const int mapSettleBoundMs = 4000;
+
 /// Runtime-side decoder of the lab command envelope `{"method": name, "args": {...}}` (fuzz target FUZ03).
 String decodeEnvelope(String text) {
   if (text.length > 16 * 1024) return 'REJECT_SIZE';
@@ -167,7 +171,7 @@ class LabController {
     }
   }
 
-  // ---------------------------------------------------------------- B02 map inspection (G1-MAP-INSPECT-1.0)
+  // ---------------------------------------------------------------- B02 map inspection (G1-MAP-INSPECT-1.1)
 
   /// Registered render view: home screen, the floor through the UI handler, the camera moved without animation.
   Future<void> _mapCamera(Map<String, Object?> a) async {
@@ -181,17 +185,39 @@ class LabController {
     await _mark('map.camera.done', ['floor', '${state.floor}']);
   }
 
+  /// The settled reading of G1-MAP-INSPECT-1.1: the reading is repeated every [mapSettleIntervalMs] until two consecutive
+  /// readings report the same rendered features (at least one feature while a style is loaded) or [mapSettleBoundMs]
+  /// have passed since the first reading began; the last reading is written with the number of readings.
   Future<void> _mapInspect(String runId) async {
     await _mark('run.start', ['run', runId, 'map', 'inspect']);
     await state.nextFrame();
-    final m = await state.map?.inspect() ?? const {'available': false};
+    final sw = Stopwatch()..start();
+    var passes = 0;
+    var settled = false;
+    String? previous;
+    Map<String, Object?> m = const {'available': false};
+    while (true) {
+      m = await state.map?.inspect() ?? const {'available': false};
+      passes++;
+      if (m['available'] != true) break;
+      final rendered = m['rendered'] as List<Object?>? ?? const [];
+      final key = jsonEncode(rendered);
+      if (key == previous && (rendered.isNotEmpty || m['style_loaded'] != true)) {
+        settled = true;
+        break;
+      }
+      if (sw.elapsedMilliseconds >= mapSettleBoundMs) break;
+      previous = key;
+      await Future<void>.delayed(const Duration(milliseconds: mapSettleIntervalMs));
+    }
     await G1Native.writeOut('$runId.json', jsonEncode({
-      'contract': 'G1-MAP-INSPECT-1.0',
+      'contract': 'G1-MAP-INSPECT-1.1',
       'run_id': runId,
       'app': 'A',
       'app_floor': state.floor,
       'app_lang': state.lang,
       ...m,
+      'settle': {'passes': passes, 'elapsed_ms': sw.elapsedMilliseconds, 'settled': settled},
     }));
     await _mark('run.done', ['run', runId, 'map', 'inspect']);
   }

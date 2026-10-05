@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../core/format.dart';
+import '../core/policy.dart';
 import '../core/strings.dart';
 import 'map_view.dart';
 
@@ -68,8 +69,12 @@ class _Root extends StatelessWidget {
       },
       child: Stack(
         children: [
-          // the home screen (with its map) stays alive under the other screens
-          Offstage(offstage: page != null, child: TickerMode(enabled: page == null, child: HomeScreen(state: state))),
+          // the home screen (with its map) stays alive under the other screens; while it is covered it is neither painted
+          // nor hit (Offstage) and takes no keyboard focus (ExcludeFocus: Offstage alone leaves its widgets focusable)
+          ExcludeFocus(
+            excluding: page != null,
+            child: Offstage(offstage: page != null, child: TickerMode(enabled: page == null, child: HomeScreen(state: state))),
+          ),
           if (page != null) Positioned.fill(child: page),
         ],
       ),
@@ -81,7 +86,9 @@ AppBar _bar(Strings s, String title, {String? backId, VoidCallback? onBack, List
       title: Text(title),
       leading: backId == null
           ? null
-          : gid(backId, IconButton(icon: const BackButtonIcon(), tooltip: s.t('common.back'), onPressed: onBack)),
+          // the button is named by its tooltip in the app language; the icon's own label comes from the framework's
+          // built-in (English) localization and is left out
+          : gid(backId, IconButton(icon: const ExcludeSemantics(child: BackButtonIcon()), tooltip: s.t('common.back'), onPressed: onBack)),
       actions: actions,
     );
 
@@ -98,6 +105,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _field = TextEditingController();
+  final GlobalKey _mapKey = GlobalKey(debugLabel: 'home.map');
   int _epoch = -1;
 
   AppState get state => widget.state;
@@ -123,6 +131,104 @@ class _HomeScreenState extends State<HomeScreen> {
     final results = state.results;
     // lab build only: one seeded accessibility defect (a11y.seed) for detector validation; null is the clean reference state
     final seed = state.seededDefect;
+    // G1-LAYOUT-1.0: the mode follows the app window inside the system insets and the text scale (never the soft keyboard)
+    final media = MediaQuery.of(context);
+    final windowWidth = media.size.width - media.viewPadding.horizontal;
+    final windowHeight = media.size.height - media.viewPadding.vertical;
+    final compact = layoutMode(windowWidth, windowHeight, media.textScaler.scale(100) / 100) == LayoutMode.compact;
+    final top = <Widget>[
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Text(s.t('app.subtitle'), style: Theme.of(context).textTheme.bodySmall),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: gid('home.trust', Text(trustText(s, state.bundleInfo),
+            style: seed == 'low-contrast' ? const TextStyle(color: Color(0xFFB0B0B0)) : null)),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: gid(
+                'home.search.field',
+                Focus(
+                  // focus-trap seed: the field's ancestor consumes TAB before the app's focus traversal shortcut
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  includeSemantics: false,
+                  onKeyEvent: (node, e) =>
+                      seed == 'focus-trap' && e.logicalKey == LogicalKeyboardKey.tab ? KeyEventResult.handled : KeyEventResult.ignored,
+                  child: TextField(
+                    controller: _field,
+                    enabled: enabled,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(labelText: s.t('home.search.label'), hintText: s.t('home.search.hint')),
+                    onChanged: (v) => state.setQuery(v),
+                    onSubmitted: (_) => state.submitSearch(),
+                  ),
+                ),
+              ),
+            ),
+            if (state.query.isNotEmpty)
+              gid('home.search.clear',
+                  IconButton(icon: const Icon(Icons.clear), tooltip: s.t('home.search.clear'), onPressed: state.clearSearch)),
+            gid('home.search.submit',
+                FilledButton(onPressed: enabled ? state.submitSearch : null,
+                    child: seed == 'missing-label' ? const SizedBox(width: 24, height: 24) : Text(s.t('home.search.submit')))),
+          ],
+        ),
+      ),
+    ];
+    final rows = <Widget>[
+      if (results != null)
+        for (final id in results.ids)
+          gid(
+            'home.result.$id',
+            ListTile(
+              title: Text(s.t('home.result.item', {
+                'code': state.data!.byId[id]!.code,
+                'name': state.data!.byId[id]!.name(s.lang),
+              })),
+              subtitle: Text(s.t('common.building_floor', {
+                'building': state.data!.byId[id]!.building,
+                'floor': state.data!.byId[id]!.floor,
+              })),
+              onTap: () => state.openDetails(id),
+            ),
+          ),
+    ];
+    // regular: the list scrolls inside the results region; compact: every row is laid out in the screen's own scroll
+    final Widget resultsBlock = results == null
+        ? Padding(padding: const EdgeInsets.all(16), child: gid('home.empty', Text(s.t('home.empty'))))
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: gid('home.results.status', Text(_resultStatus(s, results.outcome, results.ids.length))),
+              ),
+              if (compact)
+                gid('home.results.list', Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows))
+              else
+                Expanded(child: gid('home.results.list', ListView(children: rows))),
+            ],
+          );
+    final floors = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(s.t('home.floor.label')),
+          for (final f in const [1, 2, 3]) _floorChip(s, f, seed),
+        ],
+      ),
+    );
+    // one map view in both modes: the key moves its state (and the platform view) when the mode changes
+    final map = MapView(key: _mapKey, state: state);
     return Scaffold(
       appBar: AppBar(
         title: gid('home.title', Text(s.t('app.title'))),
@@ -143,104 +249,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(s.t('app.subtitle'), style: Theme.of(context).textTheme.bodySmall),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: gid('home.trust', Text(trustText(s, state.bundleInfo),
-                  style: seed == 'low-contrast' ? const TextStyle(color: Color(0xFFB0B0B0)) : null)),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: gid(
-                      'home.search.field',
-                      Focus(
-                        // focus-trap seed: the field's ancestor consumes TAB before the app's focus traversal shortcut
-                        canRequestFocus: false,
-                        skipTraversal: true,
-                        includeSemantics: false,
-                        onKeyEvent: (node, e) =>
-                            seed == 'focus-trap' && e.logicalKey == LogicalKeyboardKey.tab ? KeyEventResult.handled : KeyEventResult.ignored,
-                        child: TextField(
-                          controller: _field,
-                          enabled: enabled,
-                          textInputAction: TextInputAction.search,
-                          decoration: InputDecoration(labelText: s.t('home.search.label'), hintText: s.t('home.search.hint')),
-                          onChanged: (v) => state.setQuery(v),
-                          onSubmitted: (_) => state.submitSearch(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (state.query.isNotEmpty)
-                    gid('home.search.clear',
-                        IconButton(icon: const Icon(Icons.clear), tooltip: s.t('home.search.clear'), onPressed: state.clearSearch)),
-                  gid('home.search.submit',
-                      FilledButton(onPressed: enabled ? state.submitSearch : null,
-                          child: seed == 'missing-label' ? const SizedBox(width: 24, height: 24) : Text(s.t('home.search.submit')))),
-                ],
+        child: compact
+            ? SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [...top, resultsBlock, floors, SizedBox(height: compactMapHeight(windowHeight), child: map)],
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [...top, Flexible(flex: 2, child: resultsBlock), floors, Expanded(flex: 3, child: map)],
               ),
-            ),
-            Flexible(
-              flex: 2,
-              child: results == null
-                  ? Padding(padding: const EdgeInsets.all(16), child: gid('home.empty', Text(s.t('home.empty'))))
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                          child: gid('home.results.status', Text(_resultStatus(s, results.outcome, results.ids.length))),
-                        ),
-                        Expanded(
-                          child: gid(
-                            'home.results.list',
-                            ListView(
-                              children: [
-                                for (final id in results.ids)
-                                  gid(
-                                    'home.result.$id',
-                                    ListTile(
-                                      title: Text(s.t('home.result.item', {
-                                        'code': state.data!.byId[id]!.code,
-                                        'name': state.data!.byId[id]!.name(s.lang),
-                                      })),
-                                      subtitle: Text(s.t('common.building_floor', {
-                                        'building': state.data!.byId[id]!.building,
-                                        'floor': state.data!.byId[id]!.floor,
-                                      })),
-                                      onTap: () => state.openDetails(id),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(s.t('home.floor.label')),
-                  for (final f in const [1, 2, 3]) _floorChip(s, f, seed),
-                ],
-              ),
-            ),
-            Expanded(flex: 3, child: MapView(state: state)),
-          ],
-        ),
       ),
     );
   }

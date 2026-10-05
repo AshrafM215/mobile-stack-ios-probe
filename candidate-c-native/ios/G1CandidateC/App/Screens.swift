@@ -94,100 +94,195 @@ private func resultStatus(_ s: Strings, _ outcome: String, _ count: Int, _ query
 struct HomeScreen: View {
     @ObservedObject var state: AppState
     let map: MapController
+    /// The app window inside the safe area, measured without the keyboard (G1-LAYOUT-1.0); zero until first measured.
+    @State private var window = CGSize.zero
+    /// The text scale factor of the Dynamic Type setting (1.0 at the default size).
+    @ScaledMetric(relativeTo: .body) private var fontScale: CGFloat = 1
 
     var body: some View {
-        let s = state.s
         let enabled = state.trusted && state.index != nil
-        WeightedColumn(spacing: 4) {
-            HStack(spacing: 6) {
-                Text(s.t("app.title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader).accessibilityIdentifier("home.title")
-                Spacer()
-                Button(s.t("lang.toggle"), action: state.toggleLang).frame(minHeight: 48)
-                    .accessibilityLabel(s.t("lang.toggle.a11y")).accessibilityIdentifier("home.lang")
-                Button(s.t("home.qr.scan"), action: state.scanQr).frame(minHeight: 48).accessibilityIdentifier("home.qr")
-                Button(s.t("home.settings"), action: state.openSettings).frame(minHeight: 48).accessibilityIdentifier("home.settings")
+        let compact = window != .zero &&
+            LayoutPolicy.mode(width: Double(window.width), height: Double(window.height), fontScale: Double(fontScale)) == .compact
+        ZStack {
+            // measures the window; the keyboard is left out of it, so typing never changes the layout mode
+            GeometryReader { geo in
+                Color.clear.task(id: geo.size) { window = geo.size }
             }
-            .padding(.horizontal, 12)
-            Text(s.t("app.subtitle")).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(trustText(s, state.bundleInfo)).padding(.horizontal, 16).accessibilityIdentifier("home.trust")
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 8) {
-                TextField(s.t("home.search.hint"), text: $state.query)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(!enabled)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onSubmit { state.submitSearch() }
-                    .accessibilityLabel(s.t("home.search.label"))
-                    .accessibilityIdentifier("home.search.field")
-                if !state.query.isEmpty {
-                    Button(s.t("home.search.clear"), action: state.clearSearch).frame(minHeight: 48).accessibilityIdentifier("home.search.clear")
+            .ignoresSafeArea(.keyboard)
+            .accessibilityHidden(true)
+            if compact {
+                // compact: one vertical scroll container, every block at its natural height, every result row laid out
+                ScrollView {
+                    VStack(spacing: 4) {
+                        header
+                        subtitle
+                        trust
+                        searchRow(enabled: enabled)
+                        results(compact: true)
+                        floors
+                        mapPanel
+                            .frame(maxWidth: .infinity)
+                            .frame(height: CGFloat(LayoutPolicy.compactMapHeight(windowHeight: Double(window.height))))
+                    }
                 }
-                Button(s.t("home.search.submit")) { state.submitSearch() }
-                    .buttonStyle(.borderedProminent).frame(minHeight: 48).disabled(!enabled).accessibilityIdentifier("home.search.submit")
-            }
-            .padding(.horizontal, 16)
-            // weight 2 of the free height (Compose weight(2f) / Flutter flex: 2); one subview in either state
-            VStack(alignment: .leading, spacing: 0) {
-                if let results = state.results {
-                        Text(resultStatus(s, results.outcome, results.ids.count, state.query)).padding(.horizontal, 16).padding(.vertical, 6)
-                            .accessibilityIdentifier("home.results.status")
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(results.ids, id: \.self) { id in
-                                    if let d = state.data?.byId[id] {
-                                        Button { state.openDetails(id) } label: {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(s.t("home.result.item", ["code": d.code, "name": d.name(s.lang)]))
-                                                Text(s.t("common.building_floor", ["building": d.building, "floor": d.floor])).font(.footnote)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                                            .padding(.horizontal, 16)
-                                        }
-                                        .accessibilityIdentifier("home.result.\(id)")
-                                        Divider()
-                                    }
-                                }
-                            }
-                        }
-                        // a container element: an identifier on a plain container would be applied to its children too
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("home.results.list")
-                } else {
-                    Text(s.t("home.empty")).padding(16).accessibilityIdentifier("home.empty")
-                    Spacer(minLength: 0)
+            } else {
+                WeightedColumn(spacing: 4) {
+                    header
+                    subtitle
+                    trust
+                    searchRow(enabled: enabled)
+                    // weight 2 of the free height (Compose weight(2f) / Flutter flex: 2); one subview in either state
+                    results(compact: false)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .layoutWeight(2) // last modifier: the column reads it from this subview
+                    floors
+                    // weight 3 of the free height (Compose weight(3f) / Flutter flex: 3)
+                    mapPanel
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .layoutWeight(3) // last modifier: the column reads it from this subview
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .layoutWeight(2) // last modifier: the column reads it from this subview
-            HStack(spacing: 8) {
-                Text(s.t("home.floor.label"))
-                ForEach(1...3, id: \.self) { f in
-                    let selected = state.floor == f
-                    Button(s.t("home.floor.option", ["floor": f])) { state.setFloor(f) }
-                        .buttonStyle(.bordered)
-                        .frame(minHeight: 48)
-                        .accessibilityLabel(selected ? s.t("home.floor.selected", ["floor": f]) : s.t("home.floor.option", ["floor": f]))
-                        .accessibilityAddTraits(selected ? AccessibilityTraits.isSelected : AccessibilityTraits())
-                        .accessibilityIdentifier("home.floor.\(f)")
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // weight 3 of the free height (Compose weight(3f) / Flutter flex: 3)
-            MapPanel(controller: map)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(s.t("home.map.label", ["floor": state.floor]))
-                .accessibilityIdentifier("home.map")
-                .layoutWeight(3) // last modifier: the column reads it from this subview
         }
         .task(id: enabled) {
             if enabled { NextFrame.run { _ in state.homeShown() } }
         }
+    }
+
+    /// The title keeps its width: the actions stand beside it when they fit, else below it in a row, else below it stacked.
+    private var header: some View {
+        let title = Text(state.s.t("app.title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("home.title")
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                title
+                Spacer(minLength: 6)
+                actions
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                title
+                HStack(spacing: 6) { actions }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                title
+                actions
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        let s = state.s
+        Button(s.t("lang.toggle"), action: state.toggleLang).frame(minHeight: 48)
+            .accessibilityLabel(s.t("lang.toggle.a11y")).accessibilityIdentifier("home.lang")
+        Button(s.t("home.qr.scan"), action: state.scanQr).frame(minHeight: 48).accessibilityIdentifier("home.qr")
+        Button(s.t("home.settings"), action: state.openSettings).frame(minHeight: 48).accessibilityIdentifier("home.settings")
+    }
+
+    private var subtitle: some View {
+        Text(state.s.t("app.subtitle")).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var trust: some View {
+        Text(trustText(state.s, state.bundleInfo)).padding(.horizontal, 16).accessibilityIdentifier("home.trust")
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func searchRow(enabled: Bool) -> some View {
+        let s = state.s
+        return HStack(spacing: 8) {
+            TextField(s.t("home.search.hint"), text: $state.query)
+                .textFieldStyle(.roundedBorder)
+                .disabled(!enabled)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .onSubmit { state.submitSearch() }
+                .accessibilityLabel(s.t("home.search.label"))
+                .accessibilityIdentifier("home.search.field")
+            if !state.query.isEmpty {
+                Button(s.t("home.search.clear"), action: state.clearSearch).frame(minHeight: 48).accessibilityIdentifier("home.search.clear")
+            }
+            Button(s.t("home.search.submit")) { state.submitSearch() }
+                .buttonStyle(.borderedProminent).frame(minHeight: 48).disabled(!enabled).accessibilityIdentifier("home.search.submit")
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func resultRow(_ id: String) -> some View {
+        let s = state.s
+        if let d = state.data?.byId[id] {
+            Button { state.openDetails(id) } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(s.t("home.result.item", ["code": d.code, "name": d.name(s.lang)]))
+                    Text(s.t("common.building_floor", ["building": d.building, "floor": d.floor])).font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .padding(.horizontal, 16)
+            }
+            .accessibilityIdentifier("home.result.\(id)")
+            Divider()
+        }
+    }
+
+    /// regular: the list scrolls inside the results region; compact: every row is laid out in the screen's own scroll.
+    private func results(compact: Bool) -> some View {
+        let s = state.s
+        return VStack(alignment: .leading, spacing: 0) {
+            if let results = state.results {
+                Text(resultStatus(s, results.outcome, results.ids.count, state.query)).padding(.horizontal, 16).padding(.vertical, 6)
+                    .accessibilityIdentifier("home.results.status")
+                if compact {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(results.ids, id: \.self) { id in resultRow(id) }
+                    }
+                    // a container element: an identifier on a plain container would be applied to its children too
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("home.results.list")
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(results.ids, id: \.self) { id in resultRow(id) }
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("home.results.list")
+                }
+            } else {
+                Text(s.t("home.empty")).padding(16).accessibilityIdentifier("home.empty")
+                if !compact { Spacer(minLength: 0) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var floors: some View {
+        let s = state.s
+        return HStack(spacing: 8) {
+            Text(s.t("home.floor.label"))
+            ForEach(1...3, id: \.self) { f in
+                let selected = state.floor == f
+                Button(s.t("home.floor.option", ["floor": f])) { state.setFloor(f) }
+                    .buttonStyle(.bordered)
+                    .frame(minHeight: 48)
+                    .accessibilityLabel(selected ? s.t("home.floor.selected", ["floor": f]) : s.t("home.floor.option", ["floor": f]))
+                    .accessibilityAddTraits(selected ? AccessibilityTraits.isSelected : AccessibilityTraits())
+                    .accessibilityIdentifier("home.floor.\(f)")
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var mapPanel: some View {
+        MapPanel(controller: map)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(state.s.t("home.map.label", ["floor": state.floor]))
+            .accessibilityIdentifier("home.map")
     }
 }
 

@@ -74,7 +74,7 @@ String emptyStyle(List<num> center, num zoom) => jsonEncode({
       ],
     });
 
-/// Layers reported by map.inspect (G1-MAP-INSPECT-1.0).
+/// Layers reported by map.inspect (G1-MAP-INSPECT-1.1).
 const List<String> inspectLayers = ['floors', 'rooms', 'pois', 'room-labels', 'route'];
 
 /// The floor n of the first `["==", ["get", "floor"], n]` test in a filter expression as returned by the binding.

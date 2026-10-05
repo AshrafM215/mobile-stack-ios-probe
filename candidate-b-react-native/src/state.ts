@@ -20,7 +20,7 @@ export interface ScreenEntry {
 /** Imperative camera and inspection of the map binding. */
 export interface CameraPort {
   easeTo(lon: number, lat: number, zoom: number, durationMs: number): void;
-  /** Lab hook map.inspect: the map state as the binding reports it (G1-MAP-INSPECT-1.0). */
+  /** Lab hook map.inspect: the map state as the binding reports it (G1-MAP-INSPECT-1.1). */
   inspect(): Promise<Record<string, unknown>>;
 }
 

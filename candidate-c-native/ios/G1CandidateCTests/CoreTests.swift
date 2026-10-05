@@ -168,6 +168,29 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(weekdayOf("2026-10-04T08:00:00+03:00"), 7)
     }
 
+    func testLayoutPolicyMatchesTheContract() throws {
+        let contract = try JSON.decode(CoreData.text(CoreData.root.appendingPathComponent("contract/contract.json"))) as! [String: Any]
+        let layout = contract["layout"] as! [String: Any]
+        func n(_ v: Any?) -> Double { (v as! NSNumber).doubleValue }
+        XCTAssertEqual(layout["policy"] as? String, "G1-LAYOUT-1.0")
+        let regular = layout["regular"] as! [String: Any]
+        XCTAssertEqual(n(regular["min_width_dp"]), LayoutPolicy.minWidth)
+        XCTAssertEqual(n(regular["min_height_dp"]), LayoutPolicy.minHeight)
+        let compactMap = layout["compact_map"] as! [String: Any]
+        XCTAssertEqual(n(compactMap["max_height_dp"]), LayoutPolicy.compactMapMaxHeight)
+        XCTAssertEqual(n(compactMap["max_window_fraction"]), LayoutPolicy.compactMapMaxWindowFraction)
+        let modes = layout["mode_vectors"] as! [[Any]]
+        XCTAssertGreaterThanOrEqual(modes.count, 8)
+        for v in modes {
+            XCTAssertEqual(LayoutPolicy.mode(width: n(v[0]), height: n(v[1]), fontScale: n(v[2])).rawValue, v[3] as? String, "\(v)")
+        }
+        let heights = layout["map_height_vectors"] as! [[Any]]
+        XCTAssertGreaterThanOrEqual(heights.count, 4)
+        for v in heights {
+            XCTAssertEqual(LayoutPolicy.compactMapHeight(windowHeight: n(v[0])), n(v[1]), "\(v)")
+        }
+    }
+
     func testLabHooksMatchTheContract() throws {
         let contract = try JSON.decode(CoreData.text(CoreData.root.appendingPathComponent("contract/contract.json"))) as! [String: Any]
         // hooks marked "platforms": ["android"] belong to the Android-only harness case families

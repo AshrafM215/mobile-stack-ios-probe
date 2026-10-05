@@ -138,13 +138,16 @@ class _MapViewState extends State<MapView> implements MapPort {
     // gesture policy as configured on the binding's map widget (the binding has no getter)
     out['gestures'] = {'pan': true, 'zoom': true, 'rotate': false, 'tilt': false};
     out['gestures_source'] = 'configured';
-    if (_empty || !state.styleLoaded) return out;
-    out['floor'] = style.floorOfFilter(await c.getFilter('rooms'));
-    out['floor_source'] = 'live';
-    final lang = _appliedLang;
-    final labelField = lang == null ? null : (lang == 'ar' ? 'name_ar' : 'name_en');
-    out['label_field'] = labelField;
-    out['label_field_source'] = 'acknowledged';
+    String? labelField;
+    if (!_empty && state.styleLoaded) {
+      out['floor'] = style.floorOfFilter(await c.getFilter('rooms'));
+      out['floor_source'] = 'live';
+      final lang = _appliedLang;
+      labelField = lang == null ? null : (lang == 'ar' ? 'name_ar' : 'name_en');
+      out['label_field'] = labelField;
+      out['label_field_source'] = 'acknowledged';
+    }
+    // the rendered features are asked of the binding in every state (an empty style renders none of them)
     final rendered = <Map<String, Object?>>[];
     for (final layer in style.inspectLayers) {
       final seen = <String>{};

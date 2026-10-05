@@ -1,10 +1,9 @@
 // Candidate B (React Native) - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 // Screens S01-S09 of G1-CIC-1.0 plus the anchor-code result and data/trust screens. Every contract id is a testID
 // (resource-id on Android, accessibilityIdentifier on iOS).
-import React, { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   FlatList,
-  findNodeHandle,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type StyleProp,
   type TextStyle,
 } from 'react-native';
@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppState } from '../state';
 import { isoDate, qrText, rejectText, scheduleItem, stepText, summaryText, trustText } from '../core/format';
+import { compactMapHeight, layoutMode } from '../core/policy';
 import type { Strings } from '../core/strings';
 import { MapPanel } from './MapPanel';
 
@@ -118,23 +119,36 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
   }, [enabled, state]);
   const results = state.results;
   const data = state.data;
-  // the field's initial text changes only with a programmatic change (queryEpoch), never while the user types
+  // G1-LAYOUT-1.0: the mode follows the app window inside the system insets and the text scale (never the soft keyboard)
+  const win = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const windowHeight = win.height - insets.top - insets.bottom;
+  const compact = layoutMode(win.width - insets.left - insets.right, windowHeight, win.fontScale) === 'compact';
+  // the field's initial text changes only with a programmatic change (queryEpoch) or when a change of the layout mode
+  // mounts the field again (it then starts with the current query), never while the user types
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fieldInitialText = useMemo(() => state.query, [state.queryEpoch]);
+  const fieldInitialText = useMemo(() => state.query, [state.queryEpoch, compact]);
   // lab build only: one seeded accessibility defect (a11y.seed) for detector validation; null is the clean reference state
   const seed = state.seededDefect;
   const field = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const [fieldTag, setFieldTag] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    setFieldTag(findNodeHandle(field.current) ?? null);
-  }, [state.queryEpoch]);
-  return (
-    <View
-      style={ui.fill}
-      importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
-      accessibilityElementsHidden={covered}
-      pointerEvents={covered ? 'none' : 'auto'}
-    >
+  const resultRow = (id: string) => {
+    const d = data?.byId.get(id);
+    if (!d) return null;
+    return (
+      <Pressable
+        key={id}
+        testID={`home.result.${id}`}
+        accessibilityRole="button"
+        onPress={() => state.openDetails(id)}
+        style={({ pressed }) => [ui.item, pressed && ui.pressed]}
+      >
+        <T>{s.t('home.result.item', { code: d.code, name: s.lang === 'ar' ? d.nameAr : d.nameEn })}</T>
+        <T style={ui.small}>{s.t('common.building_floor', { building: d.building, floor: d.floor })}</T>
+      </Pressable>
+    );
+  };
+  const blocks = (
+    <>
       <View style={ui.header}>
         {seed === 'unlabeled-image' ? <View testID="home.seed.image" accessible accessibilityRole="image" style={ui.seedImage} /> : null}
         <T id="home.title" style={ui.headerTitle}>
@@ -163,8 +177,9 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
         <TextInput
           key={state.queryEpoch}
           ref={field}
-          // focus-trap seed: TAB moves keyboard focus to the field itself
-          nextFocusForward={seed === 'focus-trap' && fieldTag !== null ? fieldTag : undefined}
+          // focus-trap seed: the field takes keyboard focus back as soon as it loses it (React Native's TextInput exposes
+          // neither hardware key events nor the next-focus properties, which React Native implements for View only)
+          onBlur={seed === 'focus-trap' ? () => field.current?.focus() : undefined}
           testID="home.search.field"
           accessibilityLabel={s.t('home.search.label')}
           placeholder={s.t('home.search.hint')}
@@ -186,60 +201,78 @@ function HomeScreen({ state, covered }: { state: AppState; covered: boolean }) {
           disabled={!enabled}
         />
       </View>
-      <View style={ui.results}>
-        {results === null ? (
-          <T id="home.empty" style={ui.pad}>
-            {s.t('home.empty')}
+    </>
+  );
+  // regular: the list scrolls inside the results region; compact: every row is laid out in the screen's own scroll
+  const resultsRegion = (
+    <View style={compact ? undefined : ui.results}>
+      {results === null ? (
+        <T id="home.empty" style={ui.pad}>
+          {s.t('home.empty')}
+        </T>
+      ) : (
+        <>
+          <T id="home.results.status" style={ui.pad}>
+            {resultStatus(s, results.outcome, results.ids.length, state.query)}
           </T>
-        ) : (
-          <>
-            <T id="home.results.status" style={ui.pad}>
-              {resultStatus(s, results.outcome, results.ids.length, state.query)}
-            </T>
-            <FlatList
-              testID="home.results.list"
-              data={results.ids}
-              keyExtractor={(id) => id}
-              renderItem={({ item: id }) => {
-                const d = data?.byId.get(id);
-                if (!d) return null;
-                return (
-                  <Pressable
-                    testID={`home.result.${id}`}
-                    accessibilityRole="button"
-                    onPress={() => state.openDetails(id)}
-                    style={({ pressed }) => [ui.item, pressed && ui.pressed]}
-                  >
-                    <T>{s.t('home.result.item', { code: d.code, name: s.lang === 'ar' ? d.nameAr : d.nameEn })}</T>
-                    <T style={ui.small}>{s.t('common.building_floor', { building: d.building, floor: d.floor })}</T>
-                  </Pressable>
-                );
-              }}
-            />
-          </>
-        )}
-      </View>
-      <View style={ui.row}>
-        <T>{s.t('home.floor.label')}</T>
-        {[1, 2, 3].map((f) => (
-          <Btn
-            key={f}
-            id={`home.floor.${f}`}
-            label={s.t('home.floor.option', { floor: f })}
-            a11yLabel={
-              state.floor === f && seed !== 'missing-state-announcement'
-                ? s.t('home.floor.selected', { floor: f })
-                : s.t('home.floor.option', { floor: f })
-            }
-            selected={state.floor === f}
-            onPress={() => state.setFloor(f)}
-            outline
-            small={seed === 'small-target' && f === 3}
-            noState={seed === 'missing-state-announcement'}
-          />
-        ))}
-      </View>
-      <MapPanel state={state} />
+          {compact ? (
+            <View testID="home.results.list">{results.ids.map(resultRow)}</View>
+          ) : (
+            <FlatList testID="home.results.list" data={results.ids} keyExtractor={(id) => id} renderItem={({ item: id }) => resultRow(id)} />
+          )}
+        </>
+      )}
+    </View>
+  );
+  const floors = (
+    <View style={ui.row}>
+      <T>{s.t('home.floor.label')}</T>
+      {[1, 2, 3].map((f) => (
+        <Btn
+          key={f}
+          id={`home.floor.${f}`}
+          label={s.t('home.floor.option', { floor: f })}
+          a11yLabel={
+            state.floor === f && seed !== 'missing-state-announcement'
+              ? s.t('home.floor.selected', { floor: f })
+              : s.t('home.floor.option', { floor: f })
+          }
+          selected={state.floor === f}
+          onPress={() => state.setFloor(f)}
+          outline
+          small={seed === 'small-target' && f === 3}
+          noState={seed === 'missing-state-announcement'}
+        />
+      ))}
+    </View>
+  );
+  if (compact) {
+    return (
+      <ScrollView
+        style={ui.fill}
+        keyboardShouldPersistTaps="handled"
+        importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={covered}
+        pointerEvents={covered ? 'none' : 'auto'}
+      >
+        {blocks}
+        {resultsRegion}
+        {floors}
+        <MapPanel state={state} height={compactMapHeight(windowHeight)} />
+      </ScrollView>
+    );
+  }
+  return (
+    <View
+      style={ui.fill}
+      importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
+      accessibilityElementsHidden={covered}
+      pointerEvents={covered ? 'none' : 'auto'}
+    >
+      {blocks}
+      {resultsRegion}
+      {floors}
+      <MapPanel state={state} height={null} />
     </View>
   );
 }
@@ -489,8 +522,10 @@ export function Root({ state }: { state: AppState }): React.JSX.Element {
   return (
     <Rtl.Provider value={s.rtl}>
       <View style={[ui.fill, ui.screen, { direction: s.rtl ? 'rtl' : 'ltr' }]}>
-        {/* the home screen (with its map) stays mounted under the other screens */}
-        <View style={[ui.fill, pad]}>
+        {/* The home screen (with its map) stays mounted under the other screens. While it is covered it is not displayed:
+            React Native has no way to keep a subtree out of keyboard focus on Android, and a covered screen that is
+            still laid out takes TAB focus and stays in the platform's view hierarchy. */}
+        <View style={[ui.fill, pad, page !== null && ui.hidden]}>
           <HomeScreen state={state} covered={page !== null} />
         </View>
         {page !== null ? <View style={[StyleSheet.absoluteFill, ui.screen, pad]}>{page}</View> : null}
@@ -501,6 +536,7 @@ export function Root({ state }: { state: AppState }): React.JSX.Element {
 
 const ui = StyleSheet.create({
   fill: { flex: 1 },
+  hidden: { display: 'none' },
   screen: { backgroundColor: C.surface },
   text: { color: C.text, fontSize: 16 },
   small: { color: C.muted, fontSize: 13, paddingHorizontal: 16 },

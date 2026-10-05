@@ -18,7 +18,7 @@ import {
 import type { AppState } from '../state';
 import { layerFor, textField, withFloor } from '../core/style';
 
-/** Layers reported by map.inspect (G1-MAP-INSPECT-1.0). */
+/** Layers reported by map.inspect (G1-MAP-INSPECT-1.1). */
 export const INSPECT_LAYERS = ['floors', 'rooms', 'pois', 'room-labels', 'route'];
 
 /** The floor n of the first ["==", ["get", "floor"], n] test in a filter expression. */
@@ -34,7 +34,8 @@ export function floorOfFilter(expr: unknown): number | null {
   return null;
 }
 
-export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
+/** height: the fixed map height of the compact layout mode (G1-LAYOUT-1.0); null = the regular share of the free height. */
+export function MapPanel({ state, height }: { state: AppState; height: number | null }): React.JSX.Element {
   const s = state.s;
   const camera = useRef<CameraRef>(null);
   const map = useRef<MapRef>(null);
@@ -55,14 +56,17 @@ export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
           gestures: { pan: true, zoom: true, rotate: false, tilt: false },
           gestures_source: 'declared',
         };
-        if (!state.styleLoaded) return out;
-        // floor and label field as passed to the declarative layer components (the binding has no getter)
-        const rooms = st.runtimeLayers.find((l) => l.def.id === 'rooms');
-        out.floor = rooms ? floorOfFilter(withFloor(rooms.def.filter, state.floor)) : null;
-        out.floor_source = 'declared';
-        const labelField = (textField(state.lang) as string[])[1];
-        out.label_field = labelField;
-        out.label_field_source = 'declared';
+        let labelField: string | null = null;
+        if (state.styleLoaded) {
+          // floor and label field as passed to the declarative layer components (the binding has no getter)
+          const rooms = st.runtimeLayers.find((l) => l.def.id === 'rooms');
+          out.floor = rooms ? floorOfFilter(withFloor(rooms.def.filter, state.floor)) : null;
+          out.floor_source = 'declared';
+          labelField = (textField(state.lang) as string[])[1];
+          out.label_field = labelField;
+          out.label_field_source = 'declared';
+        }
+        // the rendered features are asked of the binding in every state (a style still loading renders none of them)
         const rendered: Array<Record<string, unknown>> = [];
         for (const layer of INSPECT_LAYERS) {
           const seen = new Set<string>();
@@ -77,7 +81,7 @@ export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
               kind: p.kind ?? null,
               building: p.building ?? null,
               floor: typeof p.floor === 'number' ? p.floor : null,
-              label: layer === 'room-labels' ? p[labelField] ?? null : null,
+              label: layer === 'room-labels' && labelField !== null ? p[labelField] ?? null : null,
             });
           }
         }
@@ -104,7 +108,7 @@ export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
       testID="home.map"
       accessible
       accessibilityLabel={s.t('home.map.label', { floor: state.floor })}
-      style={styles.map}
+      style={height === null ? styles.map : [styles.mapCompact, { height }]}
     >
       {st && (
         <Map
@@ -135,4 +139,5 @@ export function MapPanel({ state }: { state: AppState }): React.JSX.Element {
 
 const styles = StyleSheet.create({
   map: { flex: 3, minHeight: 160, backgroundColor: '#eef1f4' },
+  mapCompact: { backgroundColor: '#eef1f4' },
 });

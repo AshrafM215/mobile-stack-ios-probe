@@ -31,6 +31,116 @@
     "orientation": "portrait and landscape",
     "appearance": "light only"
   },
+  "layout": {
+    "policy": "G1-LAYOUT-1.0",
+    "window": "the app window inside the system insets (status bar, navigation bar, display cutout; not the soft keyboard), width and height in dp (pt on iOS), read again on every configuration change (rotation, resize, text setting)",
+    "font_scale": "the platform's text scale factor (1.0 at the default text setting)",
+    "regular": {
+      "min_width_dp": 360,
+      "min_height_dp": 600
+    },
+    "compact_map": {
+      "max_height_dp": 240,
+      "max_window_fraction": 0.5
+    },
+    "mode": "regular when width / font_scale >= min_width_dp and height / font_scale >= min_height_dp; compact otherwise",
+    "home_regular": "the header, the trust line, the search row and the floor row have their natural height; the results region and the map share the height that is left 2:3; the result list scrolls inside its region",
+    "home_compact": "the home screen is one vertical scroll container: every block has its natural height, every result row is laid out, and the map is min(max_height_dp, max_window_fraction x window height) high",
+    "other_screens": "one vertical scroll container below the header in both modes",
+    "header": "the title and the actions home.lang, home.qr and home.settings stay shown and operable at every registered window size and text setting; the actions never take the title's width: when they do not fit beside it they move to the next line (B, C). A uses the Material app bar, which keeps one line and shortens the title with an ellipsis; the full title stays in the accessibility tree",
+    "mode_change": "keeps the query, the results, the selected floor, the computed route and the screen stack; the map view may be created again and its camera may return to the home view",
+    "mode_vectors": [
+      [
+        411,
+        683,
+        1.0,
+        "regular"
+      ],
+      [
+        360,
+        600,
+        1.0,
+        "regular"
+      ],
+      [
+        359.5,
+        800,
+        1.0,
+        "compact"
+      ],
+      [
+        800,
+        599.5,
+        1.0,
+        "compact"
+      ],
+      [
+        320,
+        520,
+        1.0,
+        "compact"
+      ],
+      [
+        568,
+        272,
+        1.0,
+        "compact"
+      ],
+      [
+        768,
+        976,
+        1.0,
+        "regular"
+      ],
+      [
+        411,
+        683,
+        1.5,
+        "compact"
+      ],
+      [
+        411,
+        683,
+        2.0,
+        "compact"
+      ],
+      [
+        768,
+        976,
+        1.5,
+        "regular"
+      ],
+      [
+        1440,
+        852,
+        1.5,
+        "compact"
+      ]
+    ],
+    "map_height_vectors": [
+      [
+        520,
+        240
+      ],
+      [
+        480,
+        240
+      ],
+      [
+        479,
+        239.5
+      ],
+      [
+        296,
+        148
+      ],
+      [
+        272,
+        136
+      ]
+    ],
+    "vectors": "mode_vectors: [width, height, font_scale, mode]; map_height_vectors: [window height, compact map height]; pinned by the unit tests of A, B and C together with the constants"
+  },
   "shared_inputs": {
     "bundle": "synthetic-data/out/bundle/G1SYN-1.0.0.zip (installed on first launch through the common trust module)",
     "trust_store": "synthetic-data/out/app/trust_store.json (compiled into every build)",
@@ -475,7 +585,7 @@
           "duplicate-label": "home.qr has the accessible name of home.settings",
           "small-target": "home.floor.3 smaller than 48 dp (minimum interactive size not applied)",
           "low-contrast": "home.trust text below 4.5:1 against its background",
-          "focus-trap": "home.search.field consumes the TAB key (keyboard focus cannot leave it)",
+          "focus-trap": "keyboard focus cannot leave home.search.field with TAB (A and C: the field consumes the key; B: the field takes focus back when it loses it, because React Native's TextInput exposes no hardware key events and React Native 0.87.1 implements the next-focus properties on Android for View only)",
           "unlabeled-image": "an image home.seed.image without an accessible name",
           "wrong-role": "home.settings exposed as plain text (tap handled, no actionable role)",
           "missing-state-announcement": "home.floor.<n> without the selected state (neither state nor text announces it)"
@@ -495,7 +605,7 @@
         "args": {
           "run_id": "string"
         },
-        "effect": "writes out/<run_id>.json (G1-MAP-INSPECT-1.0): camera (lon, lat, zoom, bearing, pitch) and the features rendered in the map view per layer (floors, rooms, pois, room-labels, route: id, kind, building, floor, label) as the binding reports them; gesture policy, floor of the rooms-layer filter and label field of the room-labels layer with their source (live: read back from the binding; acknowledged: last value the binding confirmed; declared: value passed to a declarative binding; configured: widget configuration); G1MARK run.done",
+        "effect": "writes out/<run_id>.json (G1-MAP-INSPECT-1.1), the settled reading of the map: camera (lon, lat, zoom, bearing, pitch) and the features rendered in the map view per layer (floors, rooms, pois, room-labels, route: id, kind, building, floor, label) as the binding reports them, asked of the binding in every state (an empty or still loading style renders none); gesture policy, floor of the rooms-layer filter and label field of the room-labels layer with their source (live: read back from the binding; acknowledged: last value the binding confirmed; declared: value passed to a declarative binding; configured: widget configuration); the reading is repeated per map_inspect_settle and the last one is written with settle {passes, elapsed_ms, settled}; G1MARK run.done",
         "platforms": [
           "android"
         ]
@@ -512,6 +622,11 @@
           "android"
         ]
       }
+    },
+    "map_inspect_settle": {
+      "interval_ms": 100,
+      "bound_ms": 4000,
+      "rule": "The same procedure in every candidate: after one frame the reading is taken and repeated every interval_ms until two consecutive readings report the same rendered features (the same entries in the same order) and either at least one feature is rendered or no style is loaded (settled = true), or until bound_ms have passed since the first reading began (settled = false; a reading in progress completes). An unavailable map is written at once (one reading). The harness evaluates the last reading and records passes, elapsed_ms and settled as facts of the case; settled = false is not a finding by itself."
     },
     "platform_scope": "commands without \"platforms\" exist on Android and iOS; \"platforms\": [\"android\"] marks the hooks of the Android-only harness case families (the iOS scope is build and simulator feasibility)"
   },
@@ -696,6 +811,7 @@
   "update_transfer": {
     "client": "the candidate's standard HTTP client (A dart:io HttpClient with the lab CA as the only anchor; B React Native networking (XMLHttpRequest); C Android HttpsURLConnection / iOS URLSession, network security configuration)",
     "origin": "https://localhost:8443/ only (any other URL is rejected before a request)",
+    "redirects": "a redirect inside the lab origin may be followed (at most 5 hops); a redirect never causes a cleartext request and never changes the installed bundle unless the response comes from the lab origin (cases NET05, NET06). A: dart:io follows a redirect to any URL, HTTP included, and no platform cleartext policy applies to its sockets, so A turns the client's automatic redirects off and checks the origin of every hop before the request. B: React Native's networking follows redirects in its native client (OkHttp defaults) and the JavaScript layer sees only the final response; the Android network security configuration refuses the cleartext hop. C Android: HttpsURLConnection follows redirects of the same protocol only. Redirects are not exercised on iOS in G1 (the iOS cohort registers no network case)",
     "connect_timeout_s": 10,
     "inactivity_timeout_s": 30,
     "total_cap": "none (the registered N1w profile needs about 45 s for the 2.7 MB synthetic update)",

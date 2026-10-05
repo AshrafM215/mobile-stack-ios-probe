@@ -35,6 +35,10 @@ export const UI_SCRIPT: Keyframe[] = [
 ];
 export const UI_CYCLE_MS = 30000;
 
+/** Settled reading of map.inspect (contract lab.map_inspect_settle; checked against contract.json by the unit tests). */
+export const MAP_SETTLE_INTERVAL_MS = 100;
+export const MAP_SETTLE_BOUND_MS = 4000;
+
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** Runtime-side decoder of the lab command envelope {"method": name, "args": {...}} (fuzz target FUZ03). */
@@ -223,7 +227,7 @@ export class LabController {
     }
   }
 
-  // ---------------------------------------------------------------- B02 map inspection (G1-MAP-INSPECT-1.0)
+  // ---------------------------------------------------------------- B02 map inspection (G1-MAP-INSPECT-1.1)
 
   /** Registered render view: home screen, the floor through the UI handler, the camera moved without animation. */
   private async mapCamera(a: Record<string, unknown>): Promise<void> {
@@ -238,13 +242,36 @@ export class LabController {
     this.mark('map.camera.done', ['floor', String(s.floor)]);
   }
 
+  /**
+   * The settled reading of G1-MAP-INSPECT-1.1: the reading is repeated every MAP_SETTLE_INTERVAL_MS until two consecutive
+   * readings report the same rendered features (at least one feature while a style is loaded) or MAP_SETTLE_BOUND_MS
+   * have passed since the first reading began; the last reading is written with the number of readings.
+   */
   private async mapInspect(runId: string): Promise<void> {
     const s = this.state;
     this.mark('run.start', ['run', runId, 'map', 'inspect']);
     await s.nextFrame();
-    const m = s.camera ? await s.camera.inspect() : { available: false };
-    await G1.NativeG1.writeOut(`${runId}.json`, JSON.stringify({ contract: 'G1-MAP-INSPECT-1.0', run_id: runId, app: 'B', app_floor: s.floor,
-      app_lang: s.lang, ...m }));
+    const t0 = Date.now();
+    let passes = 0;
+    let settled = false;
+    let previous: string | null = null;
+    let m: Record<string, unknown> = { available: false };
+    for (;;) {
+      m = s.camera ? await s.camera.inspect() : { available: false };
+      passes += 1;
+      if (m.available !== true) break;
+      const rendered = Array.isArray(m.rendered) ? m.rendered : [];
+      const key = JSON.stringify(rendered);
+      if (key === previous && (rendered.length > 0 || m.style_loaded !== true)) {
+        settled = true;
+        break;
+      }
+      if (Date.now() - t0 >= MAP_SETTLE_BOUND_MS) break;
+      previous = key;
+      await delay(MAP_SETTLE_INTERVAL_MS);
+    }
+    await G1.NativeG1.writeOut(`${runId}.json`, JSON.stringify({ contract: 'G1-MAP-INSPECT-1.1', run_id: runId, app: 'B', app_floor: s.floor,
+      app_lang: s.lang, ...m, settle: { passes, elapsed_ms: Date.now() - t0, settled } }));
     this.mark('run.done', ['run', runId, 'map', 'inspect']);
   }
 

@@ -5,13 +5,21 @@ import { decodeBase64, decodeBase64Portable, encodeBase64, encodeBase64Portable 
 import { FormatError, parseDestinations, parseGraph, parseQueries, parseRouteCases, parseSchedule } from '../src/core/bundleData';
 import { crc32 } from '../src/core/crc32';
 import { qrText, scheduleItem, stepText, trustText } from '../src/core/format';
+import {
+  COMPACT_MAP_MAX_HEIGHT_DP,
+  COMPACT_MAP_MAX_WINDOW_FRACTION,
+  LAYOUT_MIN_HEIGHT_DP,
+  LAYOUT_MIN_WIDTH_DP,
+  compactMapHeight,
+  layoutMode,
+} from '../src/core/policy';
 import { RouteGraph } from '../src/core/route';
 import { SearchIndex } from '../src/core/search';
 import { routeSteps } from '../src/core/steps';
 import { Strings } from '../src/core/strings';
 import { layerFor, splitStyle } from '../src/core/style';
 import { decodeUtf8 } from '../src/core/utf8';
-import { decodeEnvelope, LAB_COMMANDS, UI_SCRIPT } from '../src/lab';
+import { decodeEnvelope, LAB_COMMANDS, MAP_SETTLE_BOUND_MS, MAP_SETTLE_INTERVAL_MS, UI_SCRIPT } from '../src/lab';
 
 jest.mock('g1-native', () => ({ nowNanos: () => 0, mark: () => undefined, NativeG1: {} }));
 
@@ -152,6 +160,8 @@ test('lab hooks: registered commands, UI script and envelope decoder match the c
   const contract = readJson(path.join(CONTRACT, 'contract.json'));
   expect(new Set(LAB_COMMANDS)).toEqual(new Set(Object.keys(contract.lab_hooks.commands)));
   expect(UI_SCRIPT).toEqual(contract.ui_session_script.keyframes);
+  expect([MAP_SETTLE_INTERVAL_MS, MAP_SETTLE_BOUND_MS]).toEqual([contract.lab_hooks.map_inspect_settle.interval_ms,
+    contract.lab_hooks.map_inspect_settle.bound_ms]);
   expect(decodeEnvelope('{"method":"nav.home","args":{}}')).toBe('ACCEPT');
   expect(decodeEnvelope('{"method":"shell","args":{}}')).toBe('REJECT_METHOD');
   expect(decodeEnvelope('{"method":"nav.home","args":[]}')).toBe('REJECT_ARGS');
@@ -159,6 +169,18 @@ test('lab hooks: registered commands, UI script and envelope decoder match the c
   expect(decodeEnvelope('[]')).toBe('REJECT_SHAPE');
   expect(decodeEnvelope('{')).toBe('REJECT_JSON');
   expect(decodeEnvelope('x'.repeat(20000))).toBe('REJECT_SIZE');
+});
+
+test('layout policy matches the contract', () => {
+  const layout = readJson(path.join(CONTRACT, 'contract.json')).layout;
+  expect(layout.policy).toBe('G1-LAYOUT-1.0');
+  expect([LAYOUT_MIN_WIDTH_DP, LAYOUT_MIN_HEIGHT_DP]).toEqual([layout.regular.min_width_dp, layout.regular.min_height_dp]);
+  expect([COMPACT_MAP_MAX_HEIGHT_DP, COMPACT_MAP_MAX_WINDOW_FRACTION]).toEqual([layout.compact_map.max_height_dp,
+    layout.compact_map.max_window_fraction]);
+  expect(layout.mode_vectors.length).toBeGreaterThanOrEqual(8);
+  for (const [width, height, fontScale, mode] of layout.mode_vectors) expect([width, height, fontScale, layoutMode(width, height, fontScale)]).toEqual([width, height, fontScale, mode]);
+  expect(layout.map_height_vectors.length).toBeGreaterThanOrEqual(4);
+  for (const [windowHeight, mapHeight] of layout.map_height_vectors) expect([windowHeight, compactMapHeight(windowHeight)]).toEqual([windowHeight, mapHeight]);
 });
 
 test('boundary encodings: CRC-32 check value, base64 engine and portable paths, UTF-8 replacement', () => {

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:g1_candidate_a/src/core/bundle_data.dart';
 import 'package:g1_candidate_a/src/core/crc32.dart';
 import 'package:g1_candidate_a/src/core/format.dart';
+import 'package:g1_candidate_a/src/core/policy.dart';
 import 'package:g1_candidate_a/src/core/route.dart';
 import 'package:g1_candidate_a/src/core/search.dart';
 import 'package:g1_candidate_a/src/core/steps.dart';
@@ -124,12 +125,48 @@ void main() {
     final contract = jsonDecode(File('../contract/contract.json').readAsStringSync()) as Map<String, Object?>;
     expect(labCommands, ((contract['lab_hooks'] as Map)['commands'] as Map).keys.toSet());
     expect(jsonEncode(uiScript), jsonEncode((contract['ui_session_script'] as Map)['keyframes']));
+    final settle = (contract['lab_hooks'] as Map)['map_inspect_settle'] as Map;
+    expect([mapSettleIntervalMs, mapSettleBoundMs], [settle['interval_ms'], settle['bound_ms']]);
     expect(decodeEnvelope('{"method":"nav.home","args":{}}'), 'ACCEPT');
     expect(decodeEnvelope('{"method":"shell","args":{}}'), 'REJECT_METHOD');
     expect(decodeEnvelope('{"method":"nav.home","args":[]}'), 'REJECT_ARGS');
     expect(decodeEnvelope('{"method":"nav.home","args":{},"x":1}'), 'REJECT_SHAPE');
     expect(decodeEnvelope('{'), 'REJECT_JSON');
     expect(decodeEnvelope('x' * 20000), 'REJECT_SIZE');
+  });
+
+  test('layout policy and update redirect rule match the contract', () {
+    final contract = jsonDecode(File('../contract/contract.json').readAsStringSync()) as Map<String, Object?>;
+    final layout = contract['layout'] as Map;
+    double n(Object? v) => (v as num).toDouble();
+    expect(layout['policy'], 'G1-LAYOUT-1.0');
+    expect(layoutMinWidthDp, n((layout['regular'] as Map)['min_width_dp']));
+    expect(layoutMinHeightDp, n((layout['regular'] as Map)['min_height_dp']));
+    expect(compactMapMaxHeightDp, n((layout['compact_map'] as Map)['max_height_dp']));
+    expect(compactMapMaxWindowFraction, n((layout['compact_map'] as Map)['max_window_fraction']));
+    final modes = (layout['mode_vectors'] as List).cast<List>();
+    expect(modes.length, greaterThanOrEqualTo(8));
+    for (final v in modes) {
+      expect(layoutMode(n(v[0]), n(v[1]), n(v[2])).name, v[3], reason: '$v');
+    }
+    final heights = (layout['map_height_vectors'] as List).cast<List>();
+    expect(heights.length, greaterThanOrEqualTo(4));
+    for (final v in heights) {
+      expect(compactMapHeight(n(v[0])), n(v[1]), reason: '$v');
+    }
+    // lab update: a redirect is followed only inside the lab origin and only up to the bound
+    final base = Uri.parse(defaultUpdateUrl);
+    expect(inLabOrigin(base), isTrue);
+    expect(defaultUpdateUrl, startsWith(labUpdateOrigin));
+    expect(redirectTarget(base, '/update/moved.zip', 0).toString(), 'https://localhost:8443/update/moved.zip');
+    expect(redirectTarget(base, 'https://localhost:8443/update/moved.zip', updateMaxRedirects - 1), isNotNull);
+    expect(redirectTarget(base, '/update/moved.zip', updateMaxRedirects), isNull);
+    expect(redirectTarget(base, 'http://localhost:8080/update/G1SYN-update.zip', 0), isNull);
+    expect(redirectTarget(base, 'http://localhost:8443/update/G1SYN-update.zip', 0), isNull);
+    expect(redirectTarget(base, 'https://localhost:8444/update/G1SYN-update.zip', 0), isNull);
+    expect(redirectTarget(base, 'https://localhost.example.invalid:8443/x', 0), isNull);
+    expect(redirectTarget(base, 'https://user@localhost:8443/x', 0), isNull);
+    expect(redirectTarget(base, null, 0), isNull);
   });
 
   test('runtime CRC-32 equals the standard check value', () {

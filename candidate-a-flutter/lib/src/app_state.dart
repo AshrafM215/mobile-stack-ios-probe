@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:g1_native/g1_native.dart';
 
 import 'core/bundle_data.dart';
+import 'core/policy.dart';
 import 'core/route.dart';
 import 'core/search.dart';
 import 'core/steps.dart';
@@ -36,7 +37,7 @@ abstract class MapPort {
   /// Shows an empty style (no bundle data on screen after bundle.remove).
   Future<void> clear();
 
-  /// Lab hook map.inspect: the map state as the binding reports it (G1-MAP-INSPECT-1.0).
+  /// Lab hook map.inspect: the map state as the binding reports it (G1-MAP-INSPECT-1.1).
   Future<Map<String, Object?>> inspect();
 }
 
@@ -45,9 +46,6 @@ const Set<String> seedDefects = {
   'missing-label', 'duplicate-label', 'small-target', 'low-contrast', 'focus-trap', 'unlabeled-image', 'wrong-role',
   'missing-state-announcement',
 };
-
-const String labUpdateOrigin = 'https://localhost:8443/';
-const String defaultUpdateUrl = 'https://localhost:8443/update/G1SYN-update.zip';
 
 double lonOf(int xMm) => xMm * 100 / 11131949079;
 double latOf(int yMm) => yMm * 10 / 1105742727;
@@ -477,8 +475,20 @@ class AppState extends ChangeNotifier {
       }
     });
     try {
-      final req = await client.getUrl(Uri.parse(url));
-      final res = await req.close().timeout(const Duration(seconds: 30));
+      // dart:io follows a redirect to any URL, HTTP included, and no platform cleartext policy applies to its sockets:
+      // the client's automatic redirects are off and every hop stays inside the lab origin (update_transfer.redirects)
+      var uri = Uri.parse(url);
+      late HttpClientResponse res;
+      for (var hop = 0;; hop++) {
+        final req = await client.getUrl(uri);
+        req.followRedirects = false;
+        res = await req.close().timeout(const Duration(seconds: 30));
+        if (!res.isRedirect) break;
+        final next = redirectTarget(uri, res.headers.value(HttpHeaders.locationHeader), hop);
+        await res.drain<void>();
+        if (next == null) throw const HttpException('redirect');
+        uri = next;
+      }
       if (res.statusCode == 404) {
         await res.drain<void>();
         updateStatus = 'none';
