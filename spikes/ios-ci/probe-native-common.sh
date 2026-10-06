@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Common native module (Swift package G1NativeCommon) iOS feasibility job - NON-PRODUCTION / SYNTHETIC DATA ONLY.
 # Stages: environment (pinned Xcode, runner record, simulator, dataset regeneration check: the module's resources), unit
-# (the module's trust contract suite on the simulator), build-device (the package builds for a device), lock-check.
+# (the module's trust contract suite on the simulator, which runs for this stage only), build-device (the package
+# builds for a device), lock-check.
 set -euo pipefail
 source "$(dirname "$0")/probe-common.sh"
 N=native-common
@@ -23,8 +24,10 @@ s_environment() {
 s_unit() {
   local rc=0
   cd "$PROBE_ROOT/native-common/ios"
+  sim_up
   xcodebuild -scheme "$(package_scheme)" -destination "id=$(sim_udid)" -derivedDataPath build/dd \
     -resultBundlePath "$EVIDENCE_DIR/$N-tests.xcresult" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$EVIDENCE_DIR/$N-tests.txt" || rc=$?
+  sim_down
   export_test_results "$EVIDENCE_DIR/$N-tests.xcresult" "$N-tests"
   return "$rc"
 }

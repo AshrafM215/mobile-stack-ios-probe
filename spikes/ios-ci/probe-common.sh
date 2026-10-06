@@ -21,16 +21,39 @@ PROBE_ROOT="${G1_TREE_ROOT:-$(cd "$SCRIPTS_DIR/.." && pwd)}"
 # update: resolution may write the lock files (the feedback run of an upgrade); the lock files are kept as evidence.
 : "${G1_RESOLUTION:=locked}"
 case "$G1_RESOLUTION" in locked|update) ;; *) echo "G1_RESOLUTION must be locked or update" >&2; exit 64 ;; esac
-JOB_SCHEMA="G1-IOS-JOB-1.2"
+JOB_SCHEMA="G1-IOS-JOB-1.3"
 # the Swift packages of every xcodebuild call of a job are cloned here once
 SPM_DIR="$RUNNER_TEMP/g1-swift-packages"
 UDID_FILE="$RUNNER_TEMP/g1-simulator-udid"
 
 utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-# ---------------------------------------------------------------- stage records
+# ---------------------------------------------------------------- phases and stage records
 
-# job_begin <job name> <stage id>...   declares the stages of the job in their order
+# A job runs as four steps of the workflow, one per phase (run-job.sh passes the phase as G1_PHASE). The hosting service
+# records the state of every step as it changes and publishes the notes of a step when the step ends. A runner that
+# its service loses uploads neither the log nor the evidence of its job: the record of the steps then still says in
+# which phase the job was, and the notes of the phases before it are kept. Without a phase (a local run) every stage
+# runs in one invocation.
+PHASES="environment build run device"
+: "${G1_PHASE:=}"
+if [ -n "$G1_PHASE" ]; then
+  case " $PHASES " in *" $G1_PHASE "*) ;; *) echo "unknown phase: $G1_PHASE" >&2; exit 64 ;; esac
+fi
+phase_of() {
+  case "$1" in
+    environment) echo environment ;;
+    resolve|configure|unit|build-simulator|linkage-simulator) echo build ;;
+    launch|e2e) echo run ;;
+    *) echo device ;;
+  esac
+}
+in_phase() { [ -z "$G1_PHASE" ] || [ "$(phase_of "$1")" = "$G1_PHASE" ]; }
+first_phase() { [ -z "$G1_PHASE" ] || [ "$G1_PHASE" = environment ]; }
+last_phase() { [ -z "$G1_PHASE" ] || [ "$G1_PHASE" = device ]; }
+
+# job_begin <job name> <stage id>...   declares the stages of the job in their order. The first phase begins the job; a
+# later phase continues it and reads the outcome of the stages before it from their records.
 job_begin() {
   JOB_NAME="$1"
   shift
@@ -38,25 +61,41 @@ job_begin() {
   JOB_DONE=""
   JOB_PASSED=""
   JOB_FAILED=0
-  JOB_STARTED="$(utc_now)"
+  PHASE_FAILED=0
   STAGES_FILE="$EVIDENCE_DIR/$JOB_NAME-stages.ndjson"
-  : > "$STAGES_FILE"
-  # the state of the runner during the job, one reading every twenty seconds (resource-sampler.py)
   RESOURCES_FILE="$EVIDENCE_DIR/$JOB_NAME-resources.ndjson"
-  : > "$RESOURCES_FILE"
+  local started="$RUNNER_TEMP/g1-job-started-$JOB_NAME" id status
+  if first_phase; then
+    JOB_STARTED="$(utc_now)"
+    echo "$JOB_STARTED" > "$started"
+    : > "$STAGES_FILE"
+    : > "$RESOURCES_FILE"
+  else
+    if [ ! -f "$started" ] || [ ! -f "$STAGES_FILE" ]; then
+      echo "phase $G1_PHASE: the job was not begun (the environment phase left no record)" >&2
+      exit 97
+    fi
+    JOB_STARTED="$(cat "$started")"
+    while IFS=' ' read -r id status; do
+      [ -n "$id" ] || continue
+      JOB_DONE="$JOB_DONE $id"
+      if [ "$status" = passed ]; then JOB_PASSED="$JOB_PASSED $id"; else JOB_FAILED=1; fi
+    done < <(python3 -c 'import json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    if line.strip():
+        record = json.loads(line)
+        print(record["stage"], record["status"])' "$STAGES_FILE")
+  fi
+  # the state of the runner during the phase, one reading every twenty seconds (resource-sampler.py)
   python3 "$SCRIPTS_DIR/resource-sampler.py" watch "$RESOURCES_FILE" 20 "$JOB_NAME" &
   SAMPLER_PID=$!
   trap job_end EXIT
 }
 
-# A runner that its service loses uploads neither the log nor the evidence of its job. The notes of the job page are
-# kept by the service as they are written, so the start of every stage that can take long is noted there with the state
-# of the runner: a lost job then still says which stage it was in. The service keeps ten notes of a step; the stages
-# named here take seconds and are not noted.
-QUIET_STAGES=" configure linkage-simulator linkage-device inventory lock-check "
+# The start of every stage is noted on the job page with the state of the runner (the service keeps ten notes of a step
+# and publishes them when the step ends).
 stage_note() {
   local state
-  case "$QUIET_STAGES" in *" $1 "*) return 0 ;; esac
   state="$(python3 "$SCRIPTS_DIR/resource-sampler.py" once 2>/dev/null || echo 'no reading')"
   echo "::notice title=g1 stage::$JOB_NAME $1 started $(utc_now); ${state//%/%25}"
 }
@@ -69,6 +108,8 @@ stage() {
   shift
   case "${1:-}" in needs:*) needs="${1#needs:}"; shift ;; esac
   case " $JOB_PLANNED " in *" $id "*) ;; *) echo "stage $id is not declared" >&2; exit 97 ;; esac
+  # a stage of another phase is run by the step of that phase
+  in_phase "$id" || return 0
   case " $JOB_DONE " in *" $id "*) echo "stage $id runs twice" >&2; exit 97 ;; esac
   JOB_DONE="$JOB_DONE $id"
   for n in ${needs//,/ }; do
@@ -79,6 +120,7 @@ stage() {
       "$id" "$needs" "${missing# }" >> "$STAGES_FILE"
     echo "stage $id skipped: needs${missing}" >&2
     JOB_FAILED=1
+    PHASE_FAILED=1
     return 0
   fi
   t0="$(utc_now)"
@@ -97,14 +139,18 @@ stage() {
   else
     echo "stage $id failed with exit $rc" >&2
     JOB_FAILED=1
+    PHASE_FAILED=1
   fi
   return 0
 }
 
-# job_finish   the last command of a job script: the exit status says whether every stage passed
-job_finish() { exit "$JOB_FAILED"; }
+# job_finish   the last command of a job script: the exit status says whether every stage of this phase passed (the
+# job record says it for the job; a step that failed makes the job fail whatever the later steps do)
+job_finish() { exit "$PHASE_FAILED"; }
 
-# EXIT trap: records the stages that did not run and writes the job record (the exit status of the job is unchanged)
+# EXIT trap: writes the job record as it stands after this phase (the exit status of the phase is unchanged). The record
+# lists every declared stage: a stage that has not run so far is listed as not_run. The last phase also records those
+# stages in the stage file.
 job_end() {
   local rc=$? id
   trap - EXIT
@@ -113,27 +159,35 @@ job_end() {
     kill "$SAMPLER_PID" 2>/dev/null || true
     wait "$SAMPLER_PID" 2>/dev/null || true
   fi
-  for id in $JOB_PLANNED; do
-    case " $JOB_DONE " in
-      *" $id "*) ;;
-      *) printf '{"stage":"%s","status":"not_run","exit":null,"started_at_utc":null,"ended_at_utc":null,"needs":"","needs_not_passed":""}\n' "$id" >> "$STAGES_FILE" ;;
-    esac
-  done
-  python3 - "$EVIDENCE_DIR" "$JOB_NAME" "$JOB_SCHEMA" "$JOB_STARTED" "$(utc_now)" "$rc" "$JOB_PLANNED" <<'PY' || true
+  if last_phase; then
+    for id in $JOB_PLANNED; do
+      case " $JOB_DONE " in
+        *" $id "*) ;;
+        *) printf '{"stage":"%s","status":"not_run","exit":null,"started_at_utc":null,"ended_at_utc":null,"needs":"","needs_not_passed":""}\n' "$id" >> "$STAGES_FILE" ;;
+      esac
+    done
+  fi
+  python3 - "$EVIDENCE_DIR" "$JOB_NAME" "$JOB_SCHEMA" "$JOB_STARTED" "$(utc_now)" "$rc" "$JOB_PLANNED" "$JOB_FAILED" "$G1_PHASE" <<'PY' || true
 import hashlib, json, os, pathlib, sys
-evidence, name, schema, started, ended, rc, planned = sys.argv[1:8]
+evidence, name, schema, started, ended, rc, planned, failed, phase = sys.argv[1:10]
 evidence = pathlib.Path(evidence)
 stages = [json.loads(line) for line in (evidence / (name + '-stages.ndjson')).read_text().splitlines() if line.strip()]
 for s in stages:
     s['needs'] = [x for x in s.get('needs', '').split(',') if x]
     s['needs_not_passed'] = s.get('needs_not_passed', '').split()
+# the declared stages in their order; one that has not run so far (a later phase, or a job that was cut short) is not_run
+recorded = {s['stage']: s for s in stages}
+stages = [recorded.get(stage) or {'stage': stage, 'status': 'not_run', 'exit': None, 'started_at_utc': None, 'ended_at_utc': None, 'needs': [], 'needs_not_passed': []}
+          for stage in planned.split()]
 files = {}
 for p in sorted(evidence.rglob('*')):
     if p.is_file() and p.name != name + '-job.json' and '.xcresult' not in p.as_posix():
         files[p.relative_to(evidence).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
 record = {
     'schema': schema, 'classification': 'NON-PRODUCTION / SYNTHETIC DATA ONLY', 'job': name,
-    'started_at_utc': started, 'ended_at_utc': ended, 'exit': int(rc),
+    'started_at_utc': started, 'ended_at_utc': ended,
+    # the exit status of the phase that wrote the record when it is not zero, else whether a stage of the job did not pass
+    'exit': int(rc) or int(failed), 'phase': phase or None,
     'planned_stages': planned.split(), 'stages': stages,
     'all_stages_passed': len(stages) == len(planned.split()) and all(s['status'] == 'passed' for s in stages),
     'run': {k: os.environ.get(v) for k, v in (('repository', 'GITHUB_REPOSITORY'), ('run_id', 'GITHUB_RUN_ID'), ('run_attempt', 'GITHUB_RUN_ATTEMPT'),
@@ -272,14 +326,23 @@ if not (ok_runtime and ok_type):
     sys.exit('pinned simulator runtime/device type unavailable: runtime=%s type=%s' % (ok_runtime, ok_type))
 PY
   udid=$(xcrun simctl create "$name" "$SIM_DEVICE_TYPE" "$SIM_RUNTIME")
+  # Booted once here, so that a runner that cannot boot the pinned runtime fails in the environment stage, and shut down
+  # again. A booted simulator of this runtime keeps the processors and most of the memory of a standard runner busy for
+  # its whole life (several hundred processes: the system applications and their widget extensions); nothing of it runs
+  # while the candidates are built.
   xcrun simctl boot "$udid"
   xcrun simctl bootstatus "$udid" -b > /dev/null
+  xcrun simctl shutdown "$udid"
   echo "$udid"
 }
 
-# The simulator of the job: created and booted once (environment stage); later stages read its identifier.
+# The simulator of the job: created and booted once (environment stage); later stages read its identifier. A stage that
+# needs the device running boots it (sim_up); the job shuts it down as soon as no later stage of the phase needs it
+# (sim_down; a device that is not booted is left as it is).
 prepare_simulator() { create_simulator "$1" > "$UDID_FILE"; }
 sim_udid() { cat "$UDID_FILE"; }
+sim_up() { xcrun simctl bootstatus "$(sim_udid)" -b > /dev/null; }
+sim_down() { xcrun simctl shutdown "$(sim_udid)" > /dev/null 2>&1 || true; }
 
 # ---------------------------------------------------------------- launch
 

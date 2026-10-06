@@ -40,8 +40,11 @@ s_resolve() {
 s_unit() {
   local rc=0
   cd "$PROBE_ROOT/$C/ios"
+  # the simulator runs for the unit suite and is shut down again before the app is built
+  sim_up
   "${XB[@]}" -destination "id=$(sim_udid)" -derivedDataPath build/dd -resultBundlePath "$EVIDENCE_DIR/$C-tests.xcresult" \
     CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$EVIDENCE_DIR/$C-tests.txt" || rc=$?
+  sim_down
   export_test_results "$EVIDENCE_DIR/$C-tests.xcresult" "$C-tests"
   return "$rc"
 }
@@ -55,11 +58,20 @@ s_build_simulator() {
 
 s_linkage_simulator() { capture_linkage "$SIM_APP" "$C-simulator-app"; }
 
-s_launch() { launch_and_wait_ready "$(sim_udid)" "$SIM_APP" "$BUNDLE_ID" "$C"; }
+# The simulator runs from the launch to the end of the UI flow and is shut down before the device build.
+s_launch() {
+  sim_up
+  launch_and_wait_ready "$(sim_udid)" "$SIM_APP" "$BUNDLE_ID" "$C"
+}
 
-s_e2e() { run_e2e "$(sim_udid)" "$BUNDLE_ID" "$URL_SCHEME" "$C"; }
+s_e2e() {
+  # (a stage runs in a shell of its own: the simulator is shut down when that shell ends, whatever the outcome)
+  trap sim_down EXIT
+  run_e2e "$(sim_udid)" "$BUNDLE_ID" "$URL_SCHEME" "$C"
+}
 
 s_build_device() {
+  sim_down
   cd "$PROBE_ROOT/$C/ios"
   "${XB[@]}" -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
     -derivedDataPath build/dd-device CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$EVIDENCE_DIR/$C-build-iphoneos-unsigned.txt"
